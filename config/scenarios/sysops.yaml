@@ -2,7 +2,7 @@
 id: "sysops-scenario"
 name: "SysOps Monitoring Scenario"
 description: "Scenario chuyên biệt cho việc kiểm tra hạ tầng và ping mạng"
-transport: "sse"
+transport: "http"
 host: "0.0.0.0"
 port: 8001
 prefix: "/sysops"

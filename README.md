@@ -14,7 +14,7 @@ Hệ thống **Enterprise Dynamic Scenario MCP Gateway** chuẩn doanh nghiệp 
 
 ## 🛠️ FastMCP Native MCP Protocol Tool Serving (`tools/list`)
 
-Mọi FastMCP Server instance (Gateway SSE Endpoints: `/sysops/sse`, `/utility/sse`, `/full/sse` cũng như các Dedicated Ports: `8001`, `8002`, `8003`) **phục vụ chuẩn theo thức Model Context Protocol (MCP)**.
+Mọi FastMCP Server instance (Gateway Endpoints: `/sysops/mcp`, `/utility/mcp`, `/full/mcp` cũng như các Dedicated Ports: `8001`, `8002`, `8003`) **phục vụ chuẩn theo giao thức Model Context Protocol (MCP)**.
 
 Khi MCP Client (LLM Client, Inspector, Orchestrator) kết nối và gửi yêu cầu chuẩn JSON-RPC `tools/list`:
 

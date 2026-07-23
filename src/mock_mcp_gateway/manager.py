@@ -87,7 +87,7 @@ class ScenarioConfig(BaseModel):
     id: str = Field(default="", description="Unique Scenario ID")
     name: str = Field(default="", description="Human-readable scenario name")
     description: str = Field(default="", description="Scenario description")
-    transport: str = Field(default="sse", description="MCP transport protocol ('sse')")
+    transport: str = Field(default="http", description="MCP transport protocol ('http' or 'streamable-http')")
     host: str = Field(default="0.0.0.0", description="Host address for standalone mode")
     port: int = Field(default=8001, description="Dedicated port for standalone mode")
     prefix: str = Field(default="", description="URL prefix when mounted in Gateway")
@@ -406,7 +406,7 @@ class ServerManager:
             sc_list = []
             for sc in gateway_scenarios:
                 tools, resources, prompts = self._resolve_scenario_capabilities(sc)
-                endpoint = f"{sc.prefix}/sse" if sc.transport == "sse" else f"{sc.prefix}/mcp"
+                endpoint = f"{sc.prefix}/mcp"
                 sc_list.append({
                     "id": sc.id,
                     "name": sc.name,
@@ -469,7 +469,7 @@ class ServerManager:
                     "id": scenario_obj.id,
                     "name": scenario_obj.name,
                     "prefix": scenario_obj.prefix,
-                    "endpoint": f"{scenario_obj.prefix}/sse" if scenario_obj.transport == "sse" else f"{scenario_obj.prefix}/mcp",
+                    "endpoint": f"{scenario_obj.prefix}/mcp",
                     "tools": tools,
                     "resources": resources,
                     "prompts": prompts,
@@ -684,7 +684,7 @@ class ServerManager:
         logger.info(f"=== Starting Enterprise Scenario Gateway (Shared Port {target_port}) [Auth: {self.auth_config.enabled}] ===")
         for sc in self.scenario_configs:
             if sc.enable_gateway:
-                endpoint = f"{sc.prefix}/sse" if sc.transport == "sse" else f"{sc.prefix}/mcp"
+                endpoint = f"{sc.prefix}/mcp"
                 logger.info(f" -> Scenario Endpoint [{sc.id}]: http://{target_host}:{target_port}{endpoint}")
 
         app = self.create_gateway_app()
@@ -697,7 +697,7 @@ class ServerManager:
         for sc in self.scenario_configs:
             if sc.enable_standalone:
                 app = self.get_standalone_app(sc)
-                endpoint = "/sse" if sc.transport == "sse" else "/mcp"
+                endpoint = "/mcp"
                 logger.info(f" -> Scenario Port [{sc.id}]: http://{sc.host}:{sc.port}{endpoint}")
                 uv_config = uvicorn.Config(app, host=sc.host, port=sc.port, log_level="info")
                 uv_server = uvicorn.Server(uv_config)
@@ -727,14 +727,14 @@ class ServerManager:
 
         for sc in self.scenario_configs:
             if sc.enable_gateway:
-                endpoint = f"{sc.prefix}/sse" if sc.transport == "sse" else f"{sc.prefix}/mcp"
+                endpoint = f"{sc.prefix}/mcp"
                 logger.info(f" -> Scenario Gateway [{sc.id}]: http://{target_host}:{target_port}{endpoint}")
 
         # 2. Prepare Standalone Scenario Servers
         for sc in self.scenario_configs:
             if sc.enable_standalone:
                 app = self.get_standalone_app(sc)
-                endpoint = "/sse" if sc.transport == "sse" else "/mcp"
+                endpoint = "/mcp"
                 logger.info(f" -> Scenario Port    [{sc.id}]: http://{sc.host}:{sc.port}{endpoint}")
                 uv_config = uvicorn.Config(app, host=sc.host, port=sc.port, log_level="info")
                 uv_server = uvicorn.Server(uv_config)

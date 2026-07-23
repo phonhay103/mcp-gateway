@@ -36,9 +36,9 @@ def main():
     parser.add_argument(
         "--transport",
         type=str,
-        default=os.getenv("FASTMCP_TRANSPORT", "sse"),
-        choices=["sse", "streamable-http", "http"],
-        help="HTTP Streamable transport protocol for single mode (default: sse)",
+        default=os.getenv("FASTMCP_TRANSPORT", "http"),
+        choices=["http", "streamable-http"],
+        help="HTTP transport protocol for single mode (default: http)",
     )
     parser.add_argument(
         "--host",
@@ -69,7 +69,7 @@ def main():
         elif args.mode == "hybrid":
             manager.run_hybrid()
     else:
-        # Fallback to single server mode (HTTP Streamable / SSE)
+        # Fallback to single server mode (HTTP / Streamable HTTP)
         logger.info(f"Starting single Mock MCP Server using transport '{args.transport}'...")
         mcp.run(transport=args.transport, host=args.host, port=args.port)
 

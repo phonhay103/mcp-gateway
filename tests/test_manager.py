@@ -29,7 +29,7 @@ def test_server_manager_load_yaml(tmp_path: Path):
             {
                 "name": "srv1",
                 "description": "Server 1",
-                "transport": "sse",
+                "transport": "http",
                 "host": "127.0.0.1",
                 "port": 9001,
                 "prefix": "/srv1",
@@ -42,7 +42,7 @@ def test_server_manager_load_yaml(tmp_path: Path):
             {
                 "name": "srv2",
                 "description": "Server 2",
-                "transport": "sse",
+                "transport": "http",
                 "host": "127.0.0.1",
                 "port": 9002,
                 "prefix": "/srv2",
@@ -75,7 +75,7 @@ def test_server_manager_gateway_app(tmp_path: Path):
             {
                 "name": "srv1",
                 "description": "Server 1",
-                "transport": "sse",
+                "transport": "http",
                 "host": "127.0.0.1",
                 "port": 8001,
                 "prefix": "/srv1",

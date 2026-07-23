@@ -2,7 +2,7 @@
 id: "utility-scenario"
 name: "Utility Scenario"
 description: "Scenario chuyên biệt xử lý tính toán và quản lý dữ liệu"
-transport: "sse"
+transport: "http"
 host: "0.0.0.0"
 port: 8002
 prefix: "/utility"

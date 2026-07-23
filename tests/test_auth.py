@@ -35,12 +35,12 @@ def test_reject_weak_query_param_auth():
     async def system_endpoint(request):
         return PlainTextResponse("System Endpoint")
 
-    app = Starlette(routes=[Route("/system/sse", system_endpoint)])
+    app = Starlette(routes=[Route("/system/mcp", system_endpoint)])
     app.add_middleware(AuthMiddleware, auth_config=auth_config)
     client = TestClient(app)
 
     # Attempting query parameter authentication should be rejected with 400 Bad Request
-    res = client.get("/system/sse?api_key=secret123")
+    res = client.get("/system/mcp?api_key=secret123")
     assert res.status_code == 400
     assert "Weak Protocol Disabled" in res.json()["error"]
 
@@ -59,7 +59,7 @@ def test_jwt_authentication():
     async def system_endpoint(request):
         return PlainTextResponse("System Endpoint")
 
-    app = Starlette(routes=[Route("/system/sse", system_endpoint)])
+    app = Starlette(routes=[Route("/system/mcp", system_endpoint)])
     app.add_middleware(AuthMiddleware, auth_config=auth_config, server_prefix_map=prefix_map)
     client = TestClient(app)
 
@@ -68,7 +68,7 @@ def test_jwt_authentication():
         {"sub": "jwt-admin-client", "allowed_servers": ["*"]}, secret, algorithm="HS256"
     )
 
-    res = client.get("/system/sse", headers={"Authorization": f"Bearer {token}"})
+    res = client.get("/system/mcp", headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 200
     assert res.text == "System Endpoint"
 
@@ -76,7 +76,7 @@ def test_jwt_authentication():
     bad_token = jwt.encode(
         {"sub": "hacker", "allowed_servers": ["*"]}, "wrong-secret", algorithm="HS256"
     )
-    res = client.get("/system/sse", headers={"Authorization": f"Bearer {bad_token}"})
+    res = client.get("/system/mcp", headers={"Authorization": f"Bearer {bad_token}"})
     assert res.status_code == 403
 
 
@@ -105,8 +105,8 @@ def test_auth_middleware_flow():
     app = Starlette(
         routes=[
             Route("/", home),
-            Route("/system/sse", system_endpoint),
-            Route("/utility/sse", utility_endpoint),
+            Route("/system/mcp", system_endpoint),
+            Route("/utility/mcp", utility_endpoint),
         ]
     )
     app.add_middleware(AuthMiddleware, auth_config=auth_config, server_prefix_map=prefix_map)
@@ -119,28 +119,28 @@ def test_auth_middleware_flow():
     assert res.text == "Home"
 
     # 2. No API Key provided for protected route -> 401
-    res = client.get("/system/sse")
+    res = client.get("/system/mcp")
     assert res.status_code == 401
     assert "Unauthorized" in res.json()["error"]
 
     # 3. Invalid API Key -> 403
-    res = client.get("/system/sse", headers={"X-API-Key": "bad-key"})
+    res = client.get("/system/mcp", headers={"X-API-Key": "bad-key"})
     assert res.status_code == 403
 
     # 4. Valid Admin Key -> 200 on any server
-    res = client.get("/system/sse", headers={"X-API-Key": "admin-key"})
+    res = client.get("/system/mcp", headers={"X-API-Key": "admin-key"})
     assert res.status_code == 200
     assert res.text == "System Endpoint"
 
-    res = client.get("/utility/sse", headers={"Authorization": "Bearer admin-key"})
+    res = client.get("/utility/mcp", headers={"Authorization": "Bearer admin-key"})
     assert res.status_code == 200
     assert res.text == "Utility Endpoint"
 
     # 5. Sys-user key on allowed server -> 200
-    res = client.get("/system/sse", headers={"X-API-Key": "sys-key"})
+    res = client.get("/system/mcp", headers={"X-API-Key": "sys-key"})
     assert res.status_code == 200
 
     # 6. Sys-user key on disallowed server -> 403
-    res = client.get("/utility/sse", headers={"X-API-Key": "sys-key"})
+    res = client.get("/utility/mcp", headers={"X-API-Key": "sys-key"})
     assert res.status_code == 403
     assert "not authorized" in res.json()["message"]
