@@ -87,7 +87,7 @@ class ScenarioConfig(BaseModel):
     id: str = Field(default="", description="Unique Scenario ID")
     name: str = Field(default="", description="Human-readable scenario name")
     description: str = Field(default="", description="Scenario description")
-    transport: str = Field(default="http", description="MCP transport protocol ('http' or 'streamable-http')")
+    transport: str = Field(default="streamable-http", description="MCP transport protocol ('streamable-http')")
     host: str = Field(default="0.0.0.0", description="Host address for standalone mode")
     port: int = Field(default=8001, description="Dedicated port for standalone mode")
     prefix: str = Field(default="", description="URL prefix when mounted in Gateway")
