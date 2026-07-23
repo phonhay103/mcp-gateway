@@ -2,7 +2,7 @@
 Tool, resource, and prompt implementations for Mock MCP using Pydantic v2 schemas and 3-Way Session Isolation.
 MCP Tools remain scenario-agnostic pure functions operating on isolated session state.
 Tool parameter schemas are annotated via typing.Annotated & Pydantic Field for FastMCP native tools/list protocol serving.
-Supports MCP standard tool execution error returns with isError: true (via fastmcp.tools.base.ToolResult).
+Supports detailed tool-level result overrides or MCP standard execution errors with isError: true.
 """
 
 from datetime import datetime, timezone
@@ -62,27 +62,64 @@ class EchoOutput(BaseModel):
     server_id: str
 
 
-# --- Helper for MCP Error Simulation according to MCP standard (isError: true) ---
+# --- Helper for Detailed Tool-Level Scenario Behavior (Error or Mock Result) ---
 
-def check_scenario_error_simulation(
+def check_scenario_tool_behavior(
     tool_name: str,
     session_id: Optional[str] = None,
     scenario_id: Optional[str] = None,
     server_id: Optional[str] = None,
-) -> Optional[ToolResult]:
+) -> Optional[ToolResult | Dict[str, Any]]:
     """
-    Check if the active scenario defines an MCP tool error simulation rule.
-    Returns ToolResult with is_error=True (isError: true in MCP spec) if a rule is active.
+    Check if the active scenario defines a detailed tool-level result override or MCP error definition (isError: true).
+    Returns ToolResult (if error defined) or dict (if mock_result defined), or None if normal execution.
     """
     session = session_manager.get_session(session_id, scenario_id, server_id)
-    rule = session.get_error_simulation(tool_name)
-    if rule:
-        message = rule.get(
-            "message",
-            f"MCP Error simulated for tool '{tool_name}' in scenario '{session.scenario_id}'",
-        )
-        is_err = rule.get("is_error", True)
-        return ToolResult(content=message, is_error=is_err)
+    behavior = session.get_tool_behavior(tool_name)
+    if not behavior:
+        # Fallback to legacy error simulations if present
+        rule = session.get_error_simulation(tool_name)
+        if rule:
+            message = rule.get(
+                "message",
+                f"MCP Error simulated for tool '{tool_name}' in scenario '{session.scenario_id}'",
+            )
+            is_err = rule.get("is_error", True)
+            return ToolResult(content=message, is_error=is_err)
+        return None
+
+    # 1. Check tool-level error definition
+    err_cfg = behavior.get("error")
+    if err_cfg and isinstance(err_cfg, dict):
+        is_err = err_cfg.get("is_error", True)
+        if is_err:
+            msg = err_cfg.get("message", f"MCP Tool Error defined for '{tool_name}' in scenario '{session.scenario_id}'")
+            code = err_cfg.get("code")
+            details = err_cfg.get("details")
+
+            meta = {}
+            if code is not None:
+                meta["code"] = code
+            if details:
+                meta["details"] = details
+
+            formatted_msg = f"[Error Code {code}] {msg}" if code is not None else msg
+            return ToolResult(
+                content=formatted_msg,
+                meta=meta if meta else None,
+                is_error=True,
+            )
+
+    # 2. Check tool-level mock result override
+    mock_res = behavior.get("mock_result")
+    if mock_res and isinstance(mock_res, dict):
+        res = dict(mock_res)
+        res["_is_mock"] = True
+        res["session_id"] = session.session_id
+        res["scenario_id"] = session.scenario_id
+        res["server_id"] = session.server_id
+        return res
+
     return None
 
 
@@ -92,9 +129,9 @@ def echo(
     message: Annotated[str, Field(description="Message string to echo back")]
 ) -> Dict[str, Any] | ToolResult:
     """Echo back the provided message along with helpful string metadata and active session context."""
-    sim_error = check_scenario_error_simulation("echo")
-    if sim_error:
-        return sim_error
+    tb = check_scenario_tool_behavior("echo")
+    if tb is not None:
+        return tb
 
     session = session_manager.get_session()
     out = EchoOutput(
@@ -112,9 +149,9 @@ def echo(
 
 def get_system_info() -> Dict[str, Any] | ToolResult:
     """Retrieve system runtime information combined with session fixture state."""
-    sim_error = check_scenario_error_simulation("get_system_info")
-    if sim_error:
-        return sim_error
+    tb = check_scenario_tool_behavior("get_system_info")
+    if tb is not None:
+        return tb
 
     session = session_manager.get_session()
     metrics = session.state.get("system_info")
@@ -139,9 +176,9 @@ def calculate(
     expression: Annotated[str, Field(description="Mathematical expression string to evaluate (e.g. '3 + 5 * (10 - 2)')")]
 ) -> Dict[str, Any] | ToolResult:
     """Safely evaluate basic mathematical expressions (e.g. '3 + 5 * (10 - 2)')."""
-    sim_error = check_scenario_error_simulation("calculate")
-    if sim_error:
-        return sim_error
+    tb = check_scenario_tool_behavior("calculate")
+    if tb is not None:
+        return tb
 
     session = session_manager.get_session()
     allowed_operators = {
@@ -206,9 +243,9 @@ def manage_users(
     Session & Scenario isolated CRUD operations for user management.
     Actions: 'list', 'get', 'create', 'delete'.
     """
-    sim_error = check_scenario_error_simulation("manage_users", session_id, scenario_id, server_id)
-    if sim_error:
-        return sim_error
+    tb = check_scenario_tool_behavior("manage_users", session_id, scenario_id, server_id)
+    if tb is not None:
+        return tb
 
     session = session_manager.get_session(session_id, scenario_id, server_id)
     user_db = session.user_db
@@ -272,9 +309,9 @@ def http_ping(
     timeout_seconds: Annotated[float, Field(default=5.0, description="HTTP request timeout in seconds (default: 5.0)")] = 5.0,
 ) -> Dict[str, Any] | ToolResult:
     """Perform a real HTTP request to test connectivity and retrieve headers/status."""
-    sim_error = check_scenario_error_simulation("http_ping")
-    if sim_error:
-        return sim_error
+    tb = check_scenario_tool_behavior("http_ping")
+    if tb is not None:
+        return tb
 
     session = session_manager.get_session()
     if not url.startswith(("http://", "https://")):
@@ -314,9 +351,9 @@ def generate_random_data(
     Generate mock real data.
     type_name options: 'uuid', 'hex', 'timestamp'
     """
-    sim_error = check_scenario_error_simulation("generate_random_data")
-    if sim_error:
-        return sim_error
+    tb = check_scenario_tool_behavior("generate_random_data")
+    if tb is not None:
+        return tb
 
     session = session_manager.get_session()
     count = max(1, min(count, 50))

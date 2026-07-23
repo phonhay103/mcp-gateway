@@ -1,7 +1,7 @@
 """
-Tests verifying native FastMCP tools/list MCP Protocol serving and MCP isError tool error simulation.
+Tests verifying native FastMCP tools/list MCP Protocol serving and detailed tool-level scenario behaviors (mock_result and isError: True).
 Validates that FastMCP returns complete tool definitions with JSON inputSchemas
-directly through the official MCP protocol (FastMCP.list_tools()) and handles isError: True correctly.
+directly through the official MCP protocol (FastMCP.list_tools()) and handles tool-level overrides correctly.
 """
 
 import pytest
@@ -61,11 +61,11 @@ async def test_fastmcp_scenario_native_list_tools():
 
 @pytest.mark.anyio
 async def test_fastmcp_scenario_tool_error_simulation_is_error():
-    """Test MCP tool error simulations returning isError: True per MCP spec."""
+    """Test detailed tool-level MCP error definitions returning isError: True per MCP spec."""
     manager = ServerManager(Path("config/mcp_servers.yaml"))
     full_mcp = manager.instances["full-scenario"]
 
-    # 1. Test error simulation under SysOps Scenario for 'calculate'
+    # 1. Test tool-level error definition under SysOps Scenario for 'calculate'
     tok_sess1 = current_session_id.set("test-err-sess")
     tok_scen1 = current_scenario_id.set("sysops-scenario")
     tok_srv1 = current_server_id.set("full-scenario")
@@ -79,13 +79,16 @@ async def test_fastmcp_scenario_tool_error_simulation_is_error():
 
         res_sysops_err = await full_mcp.call_tool("calculate", {"expression": "5 + 5"})
         assert res_sysops_err.is_error is True
+        assert "Error Code -32603" in res_sysops_err.content[0].text
         assert "restricted in infrastructure monitoring mode" in res_sysops_err.content[0].text
+        assert res_sysops_err.meta["code"] == -32603
+        assert res_sysops_err.meta["details"]["policy"] == "security_read_only"
     finally:
         current_session_id.reset(tok_sess1)
         current_scenario_id.reset(tok_scen1)
         current_server_id.reset(tok_srv1)
 
-    # 2. Test error simulation under Utility Scenario for 'http_ping'
+    # 2. Test tool-level error definition under Utility Scenario for 'http_ping'
     tok_sess2 = current_session_id.set("test-err-sess-2")
     tok_scen2 = current_scenario_id.set("utility-scenario")
     tok_srv2 = current_server_id.set("full-scenario")
@@ -99,7 +102,8 @@ async def test_fastmcp_scenario_tool_error_simulation_is_error():
 
         res_util_err = await full_mcp.call_tool("http_ping", {"url": "https://example.com"})
         assert res_util_err.is_error is True
-        assert "Outbound network ping is prohibited in data utility mode" in res_util_err.content[0].text
+        assert "Outbound network egress is prohibited" in res_util_err.content[0].text
+        assert res_util_err.meta["code"] == -32001
     finally:
         current_session_id.reset(tok_sess2)
         current_scenario_id.reset(tok_scen2)
@@ -128,3 +132,33 @@ async def test_fastmcp_scenario_tool_error_simulation_is_error():
         current_session_id.reset(tok_sess3)
         current_scenario_id.reset(tok_scen3)
         current_server_id.reset(tok_srv3)
+
+
+@pytest.mark.anyio
+async def test_fastmcp_scenario_tool_level_mock_result():
+    """Test tool-level mock_result override defined in scenario YAML."""
+    manager = ServerManager(Path("config/mcp_servers.yaml"))
+    full_mcp = manager.instances["full-scenario"]
+
+    # Test mock_result override for get_system_info in sysops-scenario
+    tok_sess = current_session_id.set("mock-res-sess")
+    tok_scen = current_scenario_id.set("sysops-scenario")
+    tok_srv = current_server_id.set("full-scenario")
+    try:
+        session_manager.get_or_create_session(
+            session_id="mock-res-sess",
+            scenario_id="sysops-scenario",
+            server_id="full-scenario",
+            initial_state=manager.scenario_fixture_states.get("sysops-scenario"),
+        )
+
+        res_mock = await full_mcp.call_tool("get_system_info", {})
+        assert res_mock.is_error is False
+        assert res_mock.structured_content["status"] == "sysops_healthy"
+        assert res_mock.structured_content["mode"] == "high_availability"
+        assert res_mock.structured_content["datacenter"] == "us-east-1"
+        assert res_mock.structured_content["_is_mock"] is True
+    finally:
+        current_session_id.reset(tok_sess)
+        current_scenario_id.reset(tok_scen)
+        current_server_id.reset(tok_srv)

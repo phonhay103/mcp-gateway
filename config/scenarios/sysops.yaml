@@ -16,8 +16,20 @@ servers:
 fixtures:
   - "sysops_metrics.yaml"
 
-# MCP Tool Error Simulations defined for this scenario (isError: true)
-error_simulations:
-  - tool: "calculate"
-    message: "MCP Error [SysOps Scenario]: Calculation tool is restricted in infrastructure monitoring mode."
-    is_error: true
+# Chi tiết định nghĩa ở mức Tool-Level cho kết quả (mock_result) hoặc lỗi (error with isError: true)
+tool_behaviors:
+  calculate:
+    error:
+      is_error: true
+      message: "MCP Tool Error [SysOps Scenario]: Math calculation module is restricted in infrastructure monitoring mode."
+      code: -32603
+      details:
+        scenario_id: "sysops-scenario"
+        policy: "security_read_only"
+        reason: "Unauthorized math execution"
+
+  get_system_info:
+    mock_result:
+      status: "sysops_healthy"
+      mode: "high_availability"
+      datacenter: "us-east-1"

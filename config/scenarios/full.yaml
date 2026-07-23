@@ -18,5 +18,5 @@ fixtures:
   - "default_users.yaml"
   - "sysops_metrics.yaml"
 
-# MCP Tool Error Simulations defined for this scenario (isError: true)
-error_simulations: []
+# Chi tiết định nghĩa ở mức Tool-Level cho kết quả (mock_result) hoặc lỗi (error with isError: true)
+tool_behaviors: {}

@@ -78,6 +78,26 @@ class BaseMCPServerConfig(BaseModel):
         return self
 
 
+class ToolErrorConfig(BaseModel):
+    """Detailed tool-level error definition conforming to MCP standard (isError: true)."""
+
+    is_error: bool = Field(default=True, description="Enforce MCP standard isError: true on wire protocol")
+    message: str = Field(default="Tool execution error defined by scenario", description="Detailed error message")
+    code: Optional[int] = Field(default=None, description="Optional error code (e.g. -32603, -32001)")
+    details: Optional[Dict[str, Any]] = Field(default=None, description="Optional extra error details/context")
+
+    model_config = {"extra": "ignore"}
+
+
+class ToolBehaviorConfig(BaseModel):
+    """Detailed tool-level configuration defining result overrides or error behavior for a specific tool in a scenario."""
+
+    error: Optional[ToolErrorConfig] = Field(default=None, description="Tool-level error override definition")
+    mock_result: Optional[Dict[str, Any]] = Field(default=None, description="Tool-level mock result override")
+
+    model_config = {"extra": "ignore"}
+
+
 class ErrorSimulationRule(BaseModel):
     """Pydantic v2 model defining an MCP tool error simulation rule for a scenario."""
 
@@ -114,6 +134,10 @@ class ScenarioConfig(BaseModel):
     tools: List[str] = Field(default_factory=list, description="Explicit tools selection for this scenario")
     resources: List[str] = Field(default_factory=list, description="Explicit resources selection for this scenario")
     prompts: List[str] = Field(default_factory=list, description="Explicit prompts selection for this scenario")
+    tool_behaviors: Dict[str, ToolBehaviorConfig] = Field(
+        default_factory=dict,
+        description="Detailed tool-level result overrides or MCP error definitions mapped by tool_name",
+    )
     error_simulations: List[ErrorSimulationRule] = Field(
         default_factory=list,
         description="List of MCP tool error simulations for this scenario (isError: true)",
@@ -328,8 +352,24 @@ class ServerManager:
         for sc in self.scenario_configs:
             # Load referenced fixtures
             fixture_state = self.fixture_loader.load_fixtures(sc.fixtures) if sc.fixtures else {}
-            if sc.error_simulations:
-                fixture_state["_error_simulations"] = [sim.model_dump() for sim in sc.error_simulations]
+
+            tb_data = {}
+            if sc.tool_behaviors:
+                tb_data = {t_name: tb.model_dump() for t_name, tb in sc.tool_behaviors.items()}
+            elif sc.error_simulations:
+                for sim in sc.error_simulations:
+                    tb_data[sim.tool] = {
+                        "error": {
+                            "is_error": sim.is_error,
+                            "message": sim.message,
+                            "code": None,
+                            "details": None,
+                        }
+                    }
+
+            if tb_data:
+                fixture_state["_tool_behaviors"] = tb_data
+
             self.scenario_fixture_states[sc.id] = fixture_state
 
             # Resolve exact tools selection for this scenario

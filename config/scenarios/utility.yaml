@@ -16,8 +16,21 @@ servers:
 fixtures:
   - "default_users.yaml"
 
-# MCP Tool Error Simulations defined for this scenario (isError: true)
-error_simulations:
-  - tool: "http_ping"
-    message: "MCP Error [Utility Scenario]: Outbound network ping is prohibited in data utility mode."
-    is_error: true
+# Chi tiết định nghĩa ở mức Tool-Level cho kết quả (mock_result) hoặc lỗi (error with isError: true)
+tool_behaviors:
+  http_ping:
+    error:
+      is_error: true
+      message: "MCP Tool Error [Utility Scenario]: Outbound network egress is prohibited in data utility mode."
+      code: -32001
+      details:
+        scenario_id: "utility-scenario"
+        policy: "no_external_egress"
+
+  generate_random_data:
+    mock_result:
+      status: "mock_generated"
+      data_type: "fixed_test_sequence"
+      items:
+        - "fixed-uuid-1111-2222"
+        - "fixed-uuid-3333-4444"

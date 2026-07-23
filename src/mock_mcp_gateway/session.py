@@ -54,8 +54,26 @@ class SessionData(BaseModel):
             self.state["users"] = {}
         return self.state["users"]
 
+    def get_tool_behavior(self, tool_name: str) -> Optional[Dict[str, Any]]:
+        """Return detailed tool-level behavior configuration (error or mock_result) for tool_name from scenario state."""
+        behaviors = self.state.get("_tool_behaviors", {})
+        if isinstance(behaviors, dict) and tool_name in behaviors:
+            return behaviors[tool_name]
+        return None
+
     def get_error_simulation(self, tool_name: str) -> Optional[Dict[str, Any]]:
         """Return MCP error simulation rule for tool if defined in scenario state."""
+        tb = self.get_tool_behavior(tool_name)
+        if tb and isinstance(tb, dict) and "error" in tb:
+            err = tb["error"]
+            if isinstance(err, dict):
+                return {
+                    "tool": tool_name,
+                    "message": err.get("message"),
+                    "is_error": err.get("is_error", True),
+                    "code": err.get("code"),
+                    "details": err.get("details"),
+                }
         sims = self.state.get("_error_simulations", [])
         for rule in sims:
             if isinstance(rule, dict) and rule.get("tool") == tool_name:
