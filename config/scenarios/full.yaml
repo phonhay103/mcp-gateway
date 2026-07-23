@@ -17,3 +17,6 @@ servers:
 fixtures:
   - "default_users.yaml"
   - "sysops_metrics.yaml"
+
+# MCP Tool Error Simulations defined for this scenario (isError: true)
+error_simulations: []

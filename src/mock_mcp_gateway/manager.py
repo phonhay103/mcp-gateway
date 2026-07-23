@@ -78,6 +78,22 @@ class BaseMCPServerConfig(BaseModel):
         return self
 
 
+class ErrorSimulationRule(BaseModel):
+    """Pydantic v2 model defining an MCP tool error simulation rule for a scenario."""
+
+    tool: str = Field(description="Name of the tool to simulate error for")
+    message: str = Field(
+        default="Tool execution error simulated by scenario",
+        description="Error message text returned to MCP client",
+    )
+    is_error: bool = Field(
+        default=True,
+        description="Enforce MCP standard isError: True in CallToolResult payload",
+    )
+
+    model_config = {"extra": "ignore"}
+
+
 class ScenarioConfig(BaseModel):
     """
     Pydantic v2 Model for Individual Scenario Definitions.
@@ -98,6 +114,10 @@ class ScenarioConfig(BaseModel):
     tools: List[str] = Field(default_factory=list, description="Explicit tools selection for this scenario")
     resources: List[str] = Field(default_factory=list, description="Explicit resources selection for this scenario")
     prompts: List[str] = Field(default_factory=list, description="Explicit prompts selection for this scenario")
+    error_simulations: List[ErrorSimulationRule] = Field(
+        default_factory=list,
+        description="List of MCP tool error simulations for this scenario (isError: true)",
+    )
 
     model_config = {"extra": "ignore"}
 
@@ -308,6 +328,8 @@ class ServerManager:
         for sc in self.scenario_configs:
             # Load referenced fixtures
             fixture_state = self.fixture_loader.load_fixtures(sc.fixtures) if sc.fixtures else {}
+            if sc.error_simulations:
+                fixture_state["_error_simulations"] = [sim.model_dump() for sim in sc.error_simulations]
             self.scenario_fixture_states[sc.id] = fixture_state
 
             # Resolve exact tools selection for this scenario

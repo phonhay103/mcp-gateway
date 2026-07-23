@@ -54,6 +54,14 @@ class SessionData(BaseModel):
             self.state["users"] = {}
         return self.state["users"]
 
+    def get_error_simulation(self, tool_name: str) -> Optional[Dict[str, Any]]:
+        """Return MCP error simulation rule for tool if defined in scenario state."""
+        sims = self.state.get("_error_simulations", [])
+        for rule in sims:
+            if isinstance(rule, dict) and rule.get("tool") == tool_name:
+                return rule
+        return None
+
 
 class SessionManager:
     """Thread-safe state manager with composite key isolation and lifecycle methods."""

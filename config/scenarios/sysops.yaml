@@ -15,3 +15,9 @@ servers:
 
 fixtures:
   - "sysops_metrics.yaml"
+
+# MCP Tool Error Simulations defined for this scenario (isError: true)
+error_simulations:
+  - tool: "calculate"
+    message: "MCP Error [SysOps Scenario]: Calculation tool is restricted in infrastructure monitoring mode."
+    is_error: true

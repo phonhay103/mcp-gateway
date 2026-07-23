@@ -31,14 +31,14 @@ def test_calculate():
     assert res["result"] == 14
 
     err_res = calculate("1 / 0")
-    assert err_res["status"] == "error"
+    assert err_res.is_error is True
+    assert "division by zero" in str(err_res.content)
 
 
 def test_manage_users():
     # List
     users = manage_users("list")
     assert "users" in users
-    initial_count = users["count"]
 
     # Create
     created = manage_users("create", name="Test User", email="test@example.com")

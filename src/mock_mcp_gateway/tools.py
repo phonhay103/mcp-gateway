@@ -2,6 +2,7 @@
 Tool, resource, and prompt implementations for Mock MCP using Pydantic v2 schemas and 3-Way Session Isolation.
 MCP Tools remain scenario-agnostic pure functions operating on isolated session state.
 Tool parameter schemas are annotated via typing.Annotated & Pydantic Field for FastMCP native tools/list protocol serving.
+Supports MCP standard tool execution error returns with isError: true (via fastmcp.tools.base.ToolResult).
 """
 
 from datetime import datetime, timezone
@@ -15,6 +16,7 @@ import time
 import urllib.request
 import uuid
 from typing import Annotated, Any, Dict, List, Optional
+from fastmcp.tools.base import ToolResult
 from pydantic import BaseModel, Field
 
 from mock_mcp_gateway.session import session_manager
@@ -60,12 +62,40 @@ class EchoOutput(BaseModel):
     server_id: str
 
 
+# --- Helper for MCP Error Simulation according to MCP standard (isError: true) ---
+
+def check_scenario_error_simulation(
+    tool_name: str,
+    session_id: Optional[str] = None,
+    scenario_id: Optional[str] = None,
+    server_id: Optional[str] = None,
+) -> Optional[ToolResult]:
+    """
+    Check if the active scenario defines an MCP tool error simulation rule.
+    Returns ToolResult with is_error=True (isError: true in MCP spec) if a rule is active.
+    """
+    session = session_manager.get_session(session_id, scenario_id, server_id)
+    rule = session.get_error_simulation(tool_name)
+    if rule:
+        message = rule.get(
+            "message",
+            f"MCP Error simulated for tool '{tool_name}' in scenario '{session.scenario_id}'",
+        )
+        is_err = rule.get("is_error", True)
+        return ToolResult(content=message, is_error=is_err)
+    return None
+
+
 # --- Tool Functions (Scenario-Agnostic with Annotated FastMCP Schemas) ---
 
 def echo(
     message: Annotated[str, Field(description="Message string to echo back")]
-) -> Dict[str, Any]:
+) -> Dict[str, Any] | ToolResult:
     """Echo back the provided message along with helpful string metadata and active session context."""
+    sim_error = check_scenario_error_simulation("echo")
+    if sim_error:
+        return sim_error
+
     session = session_manager.get_session()
     out = EchoOutput(
         original_message=message,
@@ -80,8 +110,12 @@ def echo(
     return out.model_dump()
 
 
-def get_system_info() -> Dict[str, Any]:
+def get_system_info() -> Dict[str, Any] | ToolResult:
     """Retrieve system runtime information combined with session fixture state."""
+    sim_error = check_scenario_error_simulation("get_system_info")
+    if sim_error:
+        return sim_error
+
     session = session_manager.get_session()
     metrics = session.state.get("system_info")
 
@@ -103,8 +137,12 @@ def get_system_info() -> Dict[str, Any]:
 
 def calculate(
     expression: Annotated[str, Field(description="Mathematical expression string to evaluate (e.g. '3 + 5 * (10 - 2)')")]
-) -> Dict[str, Any]:
+) -> Dict[str, Any] | ToolResult:
     """Safely evaluate basic mathematical expressions (e.g. '3 + 5 * (10 - 2)')."""
+    sim_error = check_scenario_error_simulation("calculate")
+    if sim_error:
+        return sim_error
+
     session = session_manager.get_session()
     allowed_operators = {
         ast.Add: operator.add,
@@ -148,14 +186,10 @@ def calculate(
             "server_id": session.server_id,
         }
     except Exception as e:
-        return {
-            "expression": expression,
-            "error": str(e),
-            "status": "error",
-            "session_id": session.session_id,
-            "scenario_id": session.scenario_id,
-            "server_id": session.server_id,
-        }
+        return ToolResult(
+            content=f"Calculation Error: {e}",
+            is_error=True
+        )
 
 
 def manage_users(
@@ -167,11 +201,15 @@ def manage_users(
     session_id: Annotated[Optional[str], Field(default=None, description="Optional session ID context override")] = None,
     scenario_id: Annotated[Optional[str], Field(default=None, description="Optional scenario ID context override")] = None,
     server_id: Annotated[Optional[str], Field(default=None, description="Optional server ID context override")] = None,
-) -> Dict[str, Any]:
+) -> Dict[str, Any] | ToolResult:
     """
     Session & Scenario isolated CRUD operations for user management.
     Actions: 'list', 'get', 'create', 'delete'.
     """
+    sim_error = check_scenario_error_simulation("manage_users", session_id, scenario_id, server_id)
+    if sim_error:
+        return sim_error
+
     session = session_manager.get_session(session_id, scenario_id, server_id)
     user_db = session.user_db
 
@@ -186,10 +224,10 @@ def manage_users(
         }
     elif action == "get":
         if not user_id:
-            return {"error": "user_id is required for 'get' action"}
+            return ToolResult(content="user_id is required for 'get' action", is_error=True)
         user = user_db.get(user_id)
         if not user:
-            return {"error": f"User with id '{user_id}' not found"}
+            return ToolResult(content=f"User with id '{user_id}' not found", is_error=True)
         return {
             "session_id": session.session_id,
             "scenario_id": session.scenario_id,
@@ -198,7 +236,7 @@ def manage_users(
         }
     elif action == "create":
         if not name or not email:
-            return {"error": "'name' and 'email' are required for 'create' action"}
+            return ToolResult(content="'name' and 'email' are required for 'create' action", is_error=True)
         new_id = user_id or f"user_{uuid.uuid4().hex[:6]}"
         try:
             user_model = UserRecord(id=new_id, name=name, email=email, role=role)
@@ -211,13 +249,13 @@ def manage_users(
                 "user": user_db[new_id],
             }
         except Exception as exc:
-            return {"error": f"Pydantic user validation failed: {exc}"}
+            return ToolResult(content=f"Pydantic user validation failed: {exc}", is_error=True)
     elif action == "delete":
         if not user_id:
-            return {"error": "user_id is required for 'delete' action"}
+            return ToolResult(content="user_id is required for 'delete' action", is_error=True)
         deleted = user_db.pop(user_id, None)
         if not deleted:
-            return {"error": f"User with id '{user_id}' not found"}
+            return ToolResult(content=f"User with id '{user_id}' not found", is_error=True)
         return {
             "status": "deleted",
             "session_id": session.session_id,
@@ -226,14 +264,18 @@ def manage_users(
             "user": deleted,
         }
 
-    return {"error": f"Invalid action '{action}'. Supported actions: list, get, create, delete."}
+    return ToolResult(content=f"Invalid action '{action}'. Supported actions: list, get, create, delete.", is_error=True)
 
 
 def http_ping(
     url: Annotated[str, Field(description="Target URL to ping (e.g. 'https://httpbin.org/get')")],
     timeout_seconds: Annotated[float, Field(default=5.0, description="HTTP request timeout in seconds (default: 5.0)")] = 5.0,
-) -> Dict[str, Any]:
+) -> Dict[str, Any] | ToolResult:
     """Perform a real HTTP request to test connectivity and retrieve headers/status."""
+    sim_error = check_scenario_error_simulation("http_ping")
+    if sim_error:
+        return sim_error
+
     session = session_manager.get_session()
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
@@ -258,26 +300,24 @@ def http_ping(
                 "server_id": session.server_id,
             }
     except Exception as e:
-        latency = round((time.time() - start) * 1000, 2)
-        return {
-            "url": url,
-            "error": str(e),
-            "latency_ms": latency,
-            "success": False,
-            "session_id": session.session_id,
-            "scenario_id": session.scenario_id,
-            "server_id": session.server_id,
-        }
+        return ToolResult(
+            content=f"HTTP Ping Failed for '{url}': {e}",
+            is_error=True
+        )
 
 
 def generate_random_data(
     type_name: Annotated[str, Field(default="uuid", description="Data generation type ('uuid', 'hex', 'timestamp')")] = "uuid",
     count: Annotated[int, Field(default=1, description="Number of items to generate (1 to 50, default: 1)")] = 1,
-) -> Dict[str, Any]:
+) -> Dict[str, Any] | ToolResult:
     """
     Generate mock real data.
     type_name options: 'uuid', 'hex', 'timestamp'
     """
+    sim_error = check_scenario_error_simulation("generate_random_data")
+    if sim_error:
+        return sim_error
+
     session = session_manager.get_session()
     count = max(1, min(count, 50))
     results = []
@@ -289,7 +329,7 @@ def generate_random_data(
         elif type_name == "timestamp":
             results.append(datetime.now(timezone.utc).isoformat())
         else:
-            return {"error": f"Unsupported type '{type_name}'. Choose from 'uuid', 'hex', 'timestamp'."}
+            return ToolResult(content=f"Unsupported type '{type_name}'. Choose from 'uuid', 'hex', 'timestamp'.", is_error=True)
 
     return {
         "type": type_name,

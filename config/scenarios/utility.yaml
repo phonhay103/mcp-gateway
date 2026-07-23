@@ -15,3 +15,9 @@ servers:
 
 fixtures:
   - "default_users.yaml"
+
+# MCP Tool Error Simulations defined for this scenario (isError: true)
+error_simulations:
+  - tool: "http_ping"
+    message: "MCP Error [Utility Scenario]: Outbound network ping is prohibited in data utility mode."
+    is_error: true
