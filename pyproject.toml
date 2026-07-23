@@ -1,0 +1,26 @@
+[project]
+name = "mock-mcp-gateway"
+version = "0.1.0"
+description = "A mock Model Context Protocol (MCP) gateway running dynamic multi-MCP servers with Enterprise Security"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "fastmcp>=3.4.4",
+    "loguru>=0.7.3",
+    "pydantic>=2.10.0",
+    "pyjwt>=2.10.0",
+    "pyyaml>=6.0.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+]
+
+[project.scripts]
+mock-mcp-gateway = "mock_mcp_gateway.main:main"
+mock-mcp = "mock_mcp_gateway.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

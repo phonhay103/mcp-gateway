@@ -1,0 +1,17 @@
+# Scenario: Utility & Data Processing
+id: "utility-scenario"
+name: "Utility Scenario"
+description: "Scenario chuyên biệt xử lý tính toán và quản lý dữ liệu"
+transport: "sse"
+host: "0.0.0.0"
+port: 8002
+prefix: "/utility"
+enable_gateway: true
+enable_standalone: true
+
+# Tham chiếu tới MCP Server gốc
+servers:
+  - "utility-server"
+
+fixtures:
+  - "default_users.yaml"

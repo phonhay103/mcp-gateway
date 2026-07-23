@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mock MCP Gateway Tools Schema Catalog",
+  "description": "Consolidated catalog of all available tool definitions, parameter schemas, and format variations (MCP inputSchema and OpenAI function formats).",
+  "version": "1.0.0",
+  "tools": [
+    {
+      "name": "echo",
+      "description": "Echo back the provided message along with helpful string metadata and active session context.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message string to echo back"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      }
+    },
+    {
+      "name": "get_system_info",
+      "description": "Retrieve system runtime information combined with session fixture state.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "calculate",
+      "description": "Safely evaluate basic mathematical expressions (e.g. '3 + 5 * (10 - 2)').",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "expression": {
+            "type": "string",
+            "description": "Mathematical expression string to evaluate"
+          }
+        },
+        "required": [
+          "expression"
+        ]
+      }
+    },
+    {
+      "name": "manage_users",
+      "description": "Session & Scenario isolated CRUD operations for user management. Actions: 'list', 'get', 'create', 'delete'.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "User CRUD action ('list', 'get', 'create', 'delete')",
+            "enum": [
+              "list",
+              "get",
+              "create",
+              "delete"
+            ]
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Unique User ID (required for 'get' and 'delete' actions)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Full Name (required for 'create' action)"
+          },
+          "email": {
+            "type": "string",
+            "description": "Email address (required for 'create' action)"
+          },
+          "role": {
+            "type": "string",
+            "description": "User access role (default: 'user')",
+            "default": "user"
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Optional session ID context override"
+          },
+          "scenario_id": {
+            "type": "string",
+            "description": "Optional scenario ID context override"
+          },
+          "server_id": {
+            "type": "string",
+            "description": "Optional server ID context override"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      }
+    },
+    {
+      "name": "http_ping",
+      "description": "Perform a real HTTP request to test connectivity and retrieve headers/status.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Target URL to ping (e.g. 'https://httpbin.org/get')"
+          },
+          "timeout_seconds": {
+            "type": "number",
+            "description": "HTTP request timeout in seconds (default: 5.0)",
+            "default": 5.0
+          }
+        },
+        "required": [
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "generate_random_data",
+      "description": "Generate mock real data. type_name options: 'uuid', 'hex', 'timestamp'.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "type_name": {
+            "type": "string",
+            "description": "Data generation type ('uuid', 'hex', 'timestamp')",
+            "enum": [
+              "uuid",
+              "hex",
+              "timestamp"
+            ],
+            "default": "uuid"
+          },
+          "count": {
+            "type": "integer",
+            "description": "Number of items to generate (1 to 50, default: 1)",
+            "default": 1
+          }
+        },
+        "required": []
+      }
+    }
+  ]
+}

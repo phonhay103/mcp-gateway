@@ -1,0 +1,51 @@
+{
+  "name": "manage_users",
+  "description": "Session & Scenario isolated CRUD operations for user management. Actions: 'list', 'get', 'create', 'delete'.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "description": "User CRUD action ('list', 'get', 'create', 'delete')",
+        "enum": [
+          "list",
+          "get",
+          "create",
+          "delete"
+        ]
+      },
+      "user_id": {
+        "type": "string",
+        "description": "Unique User ID (required for 'get' and 'delete' actions)"
+      },
+      "name": {
+        "type": "string",
+        "description": "Full Name (required for 'create' action)"
+      },
+      "email": {
+        "type": "string",
+        "description": "Email address (required for 'create' action)"
+      },
+      "role": {
+        "type": "string",
+        "description": "User access role (default: 'user')",
+        "default": "user"
+      },
+      "session_id": {
+        "type": "string",
+        "description": "Optional session ID context override"
+      },
+      "scenario_id": {
+        "type": "string",
+        "description": "Optional scenario ID context override"
+      },
+      "server_id": {
+        "type": "string",
+        "description": "Optional server ID context override"
+      }
+    },
+    "required": [
+      "action"
+    ]
+  }
+}

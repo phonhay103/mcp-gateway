@@ -1,0 +1,19 @@
+# Scenario: Full Enterprise Sandbox
+id: "full-scenario"
+name: "Full Enterprise Sandbox Scenario"
+description: "Scenario tích hợp ghép nối cả 2 MCP Servers"
+transport: "sse"
+host: "0.0.0.0"
+port: 8003
+prefix: "/full"
+enable_gateway: true
+enable_standalone: true
+
+# Scenario tổng hợp nhiều MCP Servers
+servers:
+  - "system-server"
+  - "utility-server"
+
+fixtures:
+  - "default_users.yaml"
+  - "sysops_metrics.yaml"

@@ -1,0 +1,16 @@
+{
+  "name": "calculate",
+  "description": "Safely evaluate basic mathematical expressions (e.g. '3 + 5 * (10 - 2)').",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "expression": {
+        "type": "string",
+        "description": "Mathematical expression string to evaluate"
+      }
+    },
+    "required": [
+      "expression"
+    ]
+  }
+}

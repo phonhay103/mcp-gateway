@@ -1,0 +1,9 @@
+{
+  "name": "get_system_info",
+  "description": "Retrieve system runtime information combined with session fixture state.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "required": []
+  }
+}

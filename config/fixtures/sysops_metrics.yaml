@@ -1,0 +1,6 @@
+# Shared Fixture: System Operations Mock Metrics
+system_info:
+  datacenter: "us-east-1"
+  environment: "production"
+  cluster_status: "degraded"
+  nodes: 12

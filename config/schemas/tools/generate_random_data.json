@@ -1,0 +1,25 @@
+{
+  "name": "generate_random_data",
+  "description": "Generate mock real data. type_name options: 'uuid', 'hex', 'timestamp'.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "type_name": {
+        "type": "string",
+        "description": "Data generation type ('uuid', 'hex', 'timestamp')",
+        "enum": [
+          "uuid",
+          "hex",
+          "timestamp"
+        ],
+        "default": "uuid"
+      },
+      "count": {
+        "type": "integer",
+        "description": "Number of items to generate (1 to 50, default: 1)",
+        "default": 1
+      }
+    },
+    "required": []
+  }
+}

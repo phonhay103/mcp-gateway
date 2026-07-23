@@ -1,0 +1,12 @@
+# Shared Fixture: Default Users Dataset
+users:
+  user_1:
+    id: "user_1"
+    name: "Alice Johnson"
+    email: "alice@example.com"
+    role: "admin"
+  user_2:
+    id: "user_2"
+    name: "Bob Smith"
+    email: "bob@example.com"
+    role: "user"

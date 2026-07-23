@@ -1,0 +1,17 @@
+# Scenario: SysOps & Infrastructure Monitoring
+id: "sysops-scenario"
+name: "SysOps Monitoring Scenario"
+description: "Scenario chuyên biệt cho việc kiểm tra hạ tầng và ping mạng"
+transport: "sse"
+host: "0.0.0.0"
+port: 8001
+prefix: "/sysops"
+enable_gateway: true
+enable_standalone: true
+
+# Tham chiếu tới MCP Server gốc (Scenario biết server, server KO biết scenario)
+servers:
+  - "system-server"
+
+fixtures:
+  - "sysops_metrics.yaml"

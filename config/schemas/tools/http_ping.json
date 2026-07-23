@@ -1,0 +1,21 @@
+{
+  "name": "http_ping",
+  "description": "Perform a real HTTP request to test connectivity and retrieve headers/status.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string",
+        "description": "Target URL to ping (e.g. 'https://httpbin.org/get')"
+      },
+      "timeout_seconds": {
+        "type": "number",
+        "description": "HTTP request timeout in seconds (default: 5.0)",
+        "default": 5.0
+      }
+    },
+    "required": [
+      "url"
+    ]
+  }
+}

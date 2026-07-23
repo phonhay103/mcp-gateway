@@ -1,0 +1,23 @@
+services:
+  mock-mcp-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mock-mcp-gateway
+    ports:
+      - "8000:8000"   # Shared Gateway Port (dùng chung port, phân biệt qua prefix)
+      - "8001:8001"   # Dedicated System Server Port
+      - "8002:8002"   # Dedicated Utility Server Port
+      - "8003:8003"   # Dedicated Full Server Port
+    environment:
+      - MCP_MODE=hybrid
+      - MCP_CONFIG_PATH=config/mcp_servers.yaml
+    volumes:
+      - ./config:/app/config:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
