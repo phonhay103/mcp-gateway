@@ -77,6 +77,12 @@ class ToolSchemaRegistry:
 
         self.load_schemas(schemas_dir=schemas_dir, catalog_file=catalog_file)
 
+    def register_tool_definition(self, tool_def: ToolDefinition) -> None:
+        """Register or update a tool definition in the registry."""
+        tool_def.sanitize()
+        self.tools[tool_def.name] = tool_def
+        logger.info(f"Registered tool definition [{tool_def.name}] in schema registry")
+
     def load_schemas(self, schemas_dir: Path, catalog_file: Path) -> None:
         """Load schemas from individual JSON files or fall back to master tools.json catalog."""
         self.tools.clear()

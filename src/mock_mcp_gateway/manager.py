@@ -389,6 +389,20 @@ class ServerManager:
             )
             self.instances[sc.id] = mcp_instance
 
+            # Register as Plug-In Adapter in Control Plane
+            from mock_mcp_gateway.adapters import AdapterStatus, AdapterType, PlugInAdapterConfig, adapter_registry
+            adapter_cfg = PlugInAdapterConfig(
+                name=sc.id,
+                description=sc.description,
+                adapter_type=AdapterType.SCENARIO,
+                tools=tools,
+                resources=resources,
+                prompts=prompts,
+                fixtures=sc.fixtures,
+                status=AdapterStatus.RUNNING,
+            )
+            adapter_registry.register_adapter(adapter_cfg)
+
         logger.info(
             f"Successfully loaded {len(self.scenario_configs)} Scenarios "
             f"composing capabilities from {len(self.base_servers)} Base MCP Servers "
@@ -472,6 +486,9 @@ class ServerManager:
                     "scenarios_chaos": "/scenarios/{scenario_id}/chaos",
                     "create_snapshot": "/sessions/{session_id}/snapshots",
                     "restore_snapshot": "/sessions/{session_id}/snapshots/restore",
+                    "register_server": "/servers/register",
+                    "list_servers": "/servers",
+                    "unregister_server": "/servers/{server_id}",
                 },
             }
             return JSONResponse(status_data)
@@ -862,8 +879,152 @@ class ServerManager:
                         await stack.enter_async_context(sub_app.lifespan(sub_app))
                 yield
 
+        async def register_server_endpoint(request):
+            """POST /servers/register: Dynamically register a real external HTTP/Streamable-HTTP MCP server."""
+            from mock_mcp_gateway.proxy import UpstreamMCPServerConfig, upstream_proxy_registry
+
+            try:
+                data = await request.json()
+                config = UpstreamMCPServerConfig.model_validate(data)
+                upstream_proxy_registry.register_server(config)
+
+                # Attempt tool discovery if online
+                discovered_count = 0
+                try:
+                    tools = await upstream_proxy_registry.discover_upstream_tools(config.server_id)
+                    discovered_count = len(tools)
+                except Exception as exc:
+                    logger.warning(f"Registered external server [{config.server_id}] but tools auto-discovery pending: {exc}")
+
+                return JSONResponse({
+                    "status": "registered",
+                    "server_id": config.server_id,
+                    "upstream_url": config.upstream_url,
+                    "discovered_tools_count": discovered_count,
+                }, status_code=201)
+            except Exception as exc:
+                return JSONResponse({"error": "Bad Request", "message": f"Failed to register server: {exc}"}, status_code=400)
+
+        async def list_servers_endpoint(request):
+            """GET /servers: List all registered local and external real MCP servers."""
+            from mock_mcp_gateway.proxy import upstream_proxy_registry
+
+            external_servers = upstream_proxy_registry.list_servers()
+            local_servers = [s.model_dump() for s in self.yaml_config.servers] if self.yaml_config else []
+            return JSONResponse({
+                "status": "success",
+                "local_servers": local_servers,
+                "external_upstream_servers": external_servers,
+            })
+
+        async def unregister_server_endpoint(request):
+            """DELETE /servers/{server_id}: Unregister a real external MCP server."""
+            from mock_mcp_gateway.proxy import upstream_proxy_registry
+
+            server_id = request.path_params.get("server_id")
+            removed = upstream_proxy_registry.unregister_server(server_id)
+            if not removed:
+                return JSONResponse({"error": "Not Found", "message": f"External MCP server '{server_id}' not found"}, status_code=404)
+            return JSONResponse({"status": "unregistered", "server_id": server_id})
+
+        async def list_adapters_endpoint(request):
+            """GET /adapters: List all plugged-in MCP adapters in Control Plane."""
+            from mock_mcp_gateway.adapters import adapter_registry
+
+            adapters = adapter_registry.list_adapters()
+            return JSONResponse({
+                "status": "success",
+                "count": len(adapters),
+                "adapters": [a.model_dump() for a in adapters],
+            })
+
+        async def create_adapter_endpoint(request):
+            """POST /adapters: Plug-in and deploy a new MCP Server Adapter."""
+            from mock_mcp_gateway.adapters import PlugInAdapterConfig, adapter_registry
+
+            try:
+                data = await request.json()
+                config = PlugInAdapterConfig.model_validate(data)
+                registered = adapter_registry.register_adapter(config)
+                return JSONResponse({"status": "plugged_in", "adapter": registered.model_dump()}, status_code=201)
+            except Exception as exc:
+                return JSONResponse({"error": "Bad Request", "message": f"Failed to plug-in adapter: {exc}"}, status_code=400)
+
+        async def get_adapter_endpoint(request):
+            """GET /adapters/{name}: Retrieve configuration for a specific plugged-in adapter."""
+            from mock_mcp_gateway.adapters import adapter_registry
+
+            name = request.path_params.get("name")
+            adapter = adapter_registry.get_adapter(name)
+            if not adapter:
+                return JSONResponse({"error": "Not Found", "message": f"Adapter '{name}' not found"}, status_code=404)
+            return JSONResponse(adapter.model_dump())
+
+        async def get_adapter_status_endpoint(request):
+            """GET /adapters/{name}/status: Retrieve operational status for an adapter."""
+            from mock_mcp_gateway.adapters import adapter_registry
+
+            name = request.path_params.get("name")
+            status_data = adapter_registry.get_adapter_status(name)
+            if status_data.get("status") == "NotFound":
+                return JSONResponse({"error": "Not Found", "message": status_data.get("error")}, status_code=404)
+            return JSONResponse(status_data)
+
+        async def get_adapter_logs_endpoint(request):
+            """GET /adapters/{name}/logs: Retrieve runtime logs for an adapter."""
+            from mock_mcp_gateway.adapters import adapter_registry
+
+            name = request.path_params.get("name")
+            logs = adapter_registry.get_adapter_logs(name)
+            return JSONResponse({"status": "success", "adapter_name": name, "count": len(logs), "logs": logs})
+
+        async def update_adapter_endpoint(request):
+            """PUT /adapters/{name}: Update configuration or status of a plugged-in adapter."""
+            from mock_mcp_gateway.adapters import AdapterStatus, adapter_registry
+
+            name = request.path_params.get("name")
+            adapter = adapter_registry.get_adapter(name)
+            if not adapter:
+                return JSONResponse({"error": "Not Found", "message": f"Adapter '{name}' not found"}, status_code=404)
+
+            try:
+                data = await request.json()
+                if "status" in data:
+                    adapter_registry.update_adapter_status(name, AdapterStatus(data["status"]), reason=data.get("reason", ""))
+                if "description" in data:
+                    adapter.description = data["description"]
+                if "tools" in data and isinstance(data["tools"], list):
+                    adapter.tools = data["tools"]
+                return JSONResponse({"status": "updated", "adapter": adapter.model_dump()})
+            except Exception as exc:
+                return JSONResponse({"error": "Bad Request", "message": f"Failed to update adapter: {exc}"}, status_code=400)
+
+        async def delete_adapter_endpoint(request):
+            """DELETE /adapters/{name}: Plug-out and unregister an MCP Server Adapter."""
+            from mock_mcp_gateway.adapters import adapter_registry
+
+            name = request.path_params.get("name")
+            unregistered = adapter_registry.unregister_adapter(name)
+            if not unregistered:
+                return JSONResponse({"error": "Not Found", "message": f"Adapter '{name}' not found"}, status_code=404)
+            return JSONResponse({"status": "plugged_out", "adapter_name": name})
+
+        async def global_mcp_router_endpoint(request):
+            """POST /mcp: Global Tool Gateway Router endpoint directing JSON-RPC requests across all plugged-in adapters."""
+            from mock_mcp_gateway.router import ToolGatewayRouter
+
+            return await ToolGatewayRouter.handle_mcp_request(request)
+
         routes = [
             Route("/", homepage, methods=["GET"]),
+            Route("/mcp", global_mcp_router_endpoint, methods=["POST"]),
+            Route("/adapters", list_adapters_endpoint, methods=["GET"]),
+            Route("/adapters", create_adapter_endpoint, methods=["POST"]),
+            Route("/adapters/{name}", get_adapter_endpoint, methods=["GET"]),
+            Route("/adapters/{name}/status", get_adapter_status_endpoint, methods=["GET"]),
+            Route("/adapters/{name}/logs", get_adapter_logs_endpoint, methods=["GET"]),
+            Route("/adapters/{name}", update_adapter_endpoint, methods=["PUT"]),
+            Route("/adapters/{name}", delete_adapter_endpoint, methods=["DELETE"]),
             Route("/metrics", metrics_endpoint, methods=["GET"]),
             Route("/scenarios", list_scenarios_endpoint, methods=["GET"]),
             Route("/scenarios/select", select_scenario_endpoint, methods=["POST"]),
@@ -881,6 +1042,9 @@ class ServerManager:
             Route("/sessions/{session_id}/snapshots", create_snapshot_endpoint, methods=["POST"]),
             Route("/sessions/{session_id}/snapshots/restore", restore_snapshot_endpoint, methods=["POST"]),
             Route("/repro/replay", replay_repro_endpoint, methods=["POST"]),
+            Route("/servers", list_servers_endpoint, methods=["GET"]),
+            Route("/servers/register", register_server_endpoint, methods=["POST"]),
+            Route("/servers/{server_id}", unregister_server_endpoint, methods=["DELETE"]),
             Route("/tools", list_tools_endpoint, methods=["GET"]),
             Route("/tools/{tool_name}", get_tool_endpoint, methods=["GET"]),
         ]

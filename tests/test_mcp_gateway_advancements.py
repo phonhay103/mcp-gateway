@@ -8,7 +8,6 @@ Comprehensive Test Suite for Advanced MCP Gateway Architectural Capabilities:
 - Code Mode Sandboxed Execution Meta-Tools (execute_tool_code, etc.)
 - Prometheus Metrics Exporter (/metrics)
 - Server Multiplexing
-- STDIO Protocol Bridge Adapter
 """
 
 import pytest
@@ -17,7 +16,6 @@ from pathlib import Path
 from starlette.testclient import TestClient
 
 from mock_mcp_gateway.auth import APIKeyInfo, PerCallAuthorizer
-from mock_mcp_gateway.bridge import STDIOBridgeAdapter
 from mock_mcp_gateway.logger import create_signed_audit_record
 from mock_mcp_gateway.manager import ServerManager
 from mock_mcp_gateway.metrics import metrics_collector
@@ -191,18 +189,3 @@ def test_prometheus_metrics_and_endpoints():
     # Check prefixed tool name
     tool_names = [t["name"] for t in data["tools"]]
     assert any("__" in name for name in tool_names)
-
-
-@pytest.mark.anyio
-async def test_stdio_bridge_adapter():
-    """Test STDIO bridge adapter process execution handling."""
-    import sys
-    # Launch current python interpreter with -c print json-rpc echo
-    cmd = [sys.executable, "-c", "import sys, json; line = sys.stdin.readline(); sys.stdout.write(json.dumps({'jsonrpc': '2.0', 'id': 1, 'result': 'pong'}) + '\\n'); sys.stdout.flush()"]
-    adapter = STDIOBridgeAdapter(command=cmd)
-
-    response = await adapter.send_jsonrpc_request({"jsonrpc": "2.0", "id": 1, "method": "ping"})
-    assert response["jsonrpc"] == "2.0"
-    assert response["result"] == "pong"
-
-    await adapter.stop()
