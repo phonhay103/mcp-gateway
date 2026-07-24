@@ -1,15 +1,16 @@
 """
 Tool JSON Schema Registry and Manager for Mock MCP Gateway.
-Loads, validates, and exposes tool JSON schemas in standard MCP (inputSchema) and OpenAI (function/parameters) formats.
+Loads, validates, sanitizes, and exposes tool JSON schemas in standard MCP (inputSchema)
+and OpenAI (function/parameters) formats with SHA-256 Hash Pinning against Rug-Pull attacks.
 """
 
 from pathlib import Path
-
 import json
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from mock_mcp_gateway.logger import logger
+from mock_mcp_gateway.security import ToolDescriptionSanitizer, hash_pinning_guard
 
 
 class ToolInputSchema(BaseModel):
@@ -32,6 +33,10 @@ class ToolDefinition(BaseModel):
     )
 
     model_config = {"extra": "allow"}
+
+    def sanitize(self) -> None:
+        """Sanitize description to prevent prompt injection / tool poisoning."""
+        self.description = ToolDescriptionSanitizer.sanitize_description(self.description)
 
     def to_mcp_format(self) -> Dict[str, Any]:
         """Convert to standard MCP tools/list format."""
@@ -83,8 +88,15 @@ class ToolSchemaRegistry:
                     with open(file_path, "r", encoding="utf-8") as f:
                         data = json.load(f)
                     tool_def = ToolDefinition.model_validate(data)
-                    self.tools[tool_def.name] = tool_def
-                    logger.info(f"Loaded tool schema [{tool_def.name}]: {file_path}")
+                    tool_def.sanitize()
+
+                    # Verify or pin schema hash to defend against Rug-Pull attacks
+                    mcp_payload = tool_def.to_mcp_format()
+                    if hash_pinning_guard.verify_tool_schema(tool_def.name, mcp_payload):
+                        self.tools[tool_def.name] = tool_def
+                        logger.info(f"Loaded and verified tool schema [{tool_def.name}]: {file_path}")
+                    else:
+                        logger.warning(f"Skipping tampered tool schema [{tool_def.name}]: Rug-Pull detected!")
                 except Exception as exc:
                     logger.error(f"Failed to load tool schema from {file_path}: {exc}")
 
@@ -96,9 +108,12 @@ class ToolSchemaRegistry:
                 tools_list = data.get("tools", [])
                 for item in tools_list:
                     tool_def = ToolDefinition.model_validate(item)
+                    tool_def.sanitize()
                     if tool_def.name not in self.tools:
-                        self.tools[tool_def.name] = tool_def
-                        logger.info(f"Loaded tool schema [{tool_def.name}] from catalog: {catalog_file}")
+                        mcp_payload = tool_def.to_mcp_format()
+                        if hash_pinning_guard.verify_tool_schema(tool_def.name, mcp_payload):
+                            self.tools[tool_def.name] = tool_def
+                            logger.info(f"Loaded tool schema [{tool_def.name}] from catalog: {catalog_file}")
             except Exception as exc:
                 logger.error(f"Failed to load master tool catalog from {catalog_file}: {exc}")
 

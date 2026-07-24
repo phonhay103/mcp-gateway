@@ -3,7 +3,8 @@ Multi-MCP Scenario Manager and Gateway Orchestrator with Decoupled Architecture 
 MCP Servers are pure, scenario-agnostic definitions in config/mcp_servers.yaml.
 Scenarios in config/scenarios/*.yaml dictate EXACTLY which tools, resources, and shared fixtures get loaded.
 Provides scenario management (/scenarios, /scenarios/select, /scenarios/clear), session lifecycle (/sessions, /sessions/close),
-and Tool JSON Schema catalog endpoints (/tools, /tools/{tool_name}, /scenarios/{scenario_id}/tools).
+Tool JSON Schema catalog endpoints (/tools, /tools/{tool_name}, /scenarios/{scenario_id}/tools),
+Prometheus metrics exporter (/metrics), and Server Multiplexing.
 Enforces Session Isolation via X-Session-ID, Auth, Rate Limiting & OWASP Headers across concurrent executions.
 Generates time-sortable UUID v7 for session identifiers.
 """
@@ -11,19 +12,21 @@ Generates time-sortable UUID v7 for session identifiers.
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 import asyncio
+import contextlib
 import os
 import uuid
 import yaml
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field, field_validator, model_validator
 from starlette.applications import Starlette
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 import uvicorn
 
 from mock_mcp_gateway.auth import AuthConfig, AuthMiddleware
 from mock_mcp_gateway.fixtures import FixtureLoader
 from mock_mcp_gateway.logger import logger, setup_logging
+from mock_mcp_gateway.metrics import metrics_collector
 from mock_mcp_gateway.rate_limiter import RateLimitMiddleware
 from mock_mcp_gateway.schemas import schema_registry
 from mock_mcp_gateway.security import EnterpriseSecurityMiddleware
@@ -51,6 +54,7 @@ class GatewayConfig(BaseModel):
     scenarios_dir: str = Field(default="config/scenarios", description="Directory containing scenario YAML files")
     fixtures_dir: str = Field(default="config/fixtures", description="Directory containing fixture YAML files")
     schemas_dir: str = Field(default="config/schemas/tools", description="Directory containing tool schema JSON files")
+    allowed_origins: List[str] = Field(default_factory=lambda: ["*"], description="Allowed CORS/DNS Rebinding origins")
     rate_limiting: RateLimitConfig = Field(default_factory=RateLimitConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
 
@@ -398,7 +402,8 @@ class ServerManager:
         server_prefix_map: Optional[Dict[str, str]] = None,
     ) -> None:
         """Apply Enterprise Middlewares (Session -> Auth -> Rate Limiting -> OWASP Security Headers)."""
-        app.add_middleware(EnterpriseSecurityMiddleware)
+        allowed_origins = self.yaml_config.gateway.allowed_origins if self.yaml_config else ["*"]
+        app.add_middleware(EnterpriseSecurityMiddleware, allowed_origins=allowed_origins)
         app.add_middleware(
             RateLimitMiddleware,
             requests_per_minute=self.rate_limit_rpm,
@@ -433,6 +438,7 @@ class ServerManager:
 
         async def homepage(request):
             session_id = getattr(request.state, "session_id", "N/A")
+            metrics_collector.record_request("GET", "/", 200)
             status_data = {
                 "status": "online",
                 "mode": "enterprise-scenario-gateway",
@@ -449,22 +455,37 @@ class ServerManager:
                 },
                 "scenario_count": len(gateway_scenarios),
                 "endpoints": {
+                    "metrics": "/metrics",
                     "list_scenarios": "/scenarios",
                     "select_scenario": "/scenarios/select",
                     "clear_scenario": "/scenarios/clear",
+                    "multiplexed_tools": "/scenarios/multiplexed/tools",
                     "list_sessions": "/sessions",
                     "create_session": "/sessions",
                     "close_session": "/sessions/{session_id}",
                     "list_tools": "/tools",
                     "get_tool": "/tools/{tool_name}",
                     "scenario_tools": "/scenarios/{scenario_id}/tools",
+                    "session_trace": "/sessions/{session_id}/trace",
+                    "export_repro": "/sessions/{session_id}/repro",
+                    "replay_repro": "/repro/replay",
+                    "scenarios_chaos": "/scenarios/{scenario_id}/chaos",
+                    "create_snapshot": "/sessions/{session_id}/snapshots",
+                    "restore_snapshot": "/sessions/{session_id}/snapshots/restore",
                 },
             }
             return JSONResponse(status_data)
 
+        async def metrics_endpoint(request):
+            """GET /metrics: Prometheus & OpenTelemetry compatible metrics endpoint."""
+            active_count = len(session_manager.list_active_sessions())
+            content = metrics_collector.generate_prometheus_format(active_sessions_count=active_count)
+            return Response(content=content, media_type="text/plain; version=0.0.4; charset=utf-8")
+
         async def list_scenarios_endpoint(request):
             """GET /scenarios: List all available scenarios."""
             session_id = getattr(request.state, "session_id", "N/A")
+            metrics_collector.record_request("GET", "/scenarios", 200)
             sc_list = []
             for sc in gateway_scenarios:
                 tools, resources, prompts = self._resolve_scenario_capabilities(sc)
@@ -556,6 +577,30 @@ class ServerManager:
                 "session_id": target_session_id,
                 "cleared_scenario_id": target_scenario_id or "all",
                 "cleared_records": cleared_count,
+            })
+
+        async def multiplexed_tools_endpoint(request):
+            """GET /scenarios/multiplexed/tools: Multiplexed tool list with server namespace prefixing (e.g. sysops__manage_users)."""
+            fmt = request.query_params.get("format", "mcp")
+            multiplexed_list = []
+
+            for sc in gateway_scenarios:
+                tools, _, _ = self._resolve_scenario_capabilities(sc)
+                for tool_name in tools:
+                    tool_def = schema_registry.get_tool(tool_name)
+                    if tool_def:
+                        prefixed_name = f"{sc.id}__{tool_def.name}"
+                        item = tool_def.to_mcp_format()
+                        item["name"] = prefixed_name
+                        item["original_name"] = tool_def.name
+                        item["scenario_id"] = sc.id
+                        multiplexed_list.append(item)
+
+            return JSONResponse({
+                "status": "success",
+                "mode": "server-multiplexing",
+                "count": len(multiplexed_list),
+                "tools": multiplexed_list,
             })
 
         async def list_sessions_endpoint(request):
@@ -686,25 +731,164 @@ class ServerManager:
                 "tools": tools_list,
             })
 
+        async def session_trace_endpoint(request):
+            """GET /sessions/{session_id}/trace: Retrieve chronological tool execution trace log."""
+            from mock_mcp_gateway.recorder import trace_recorder
+
+            session_id = request.path_params.get("session_id")
+            records = trace_recorder.get_session_trace(session_id)
+            return JSONResponse({
+                "status": "success",
+                "session_id": session_id,
+                "count": len(records),
+                "trace": [r.model_dump() for r in records],
+            })
+
+        async def export_repro_endpoint(request):
+            """GET /sessions/{session_id}/repro: Export self-contained .mcp-repro.json bundle for bug report/CI."""
+            from mock_mcp_gateway.chaos import chaos_engine
+            from mock_mcp_gateway.recorder import trace_recorder
+
+            session_id = request.path_params.get("session_id")
+            session = session_manager.get_session(session_id=session_id)
+            faults = chaos_engine.list_rules(scenario_id=session.scenario_id)
+
+            bundle = trace_recorder.export_repro_bundle(
+                session_id=session.session_id,
+                scenario_id=session.scenario_id,
+                initial_state=session.state,
+                fault_rules=faults,
+            )
+            return JSONResponse(bundle.model_dump())
+
+        async def replay_repro_endpoint(request):
+            """POST /repro/replay: Import and deterministically replay a .mcp-repro.json bundle."""
+            from mock_mcp_gateway.recorder import ReplayEngine, ReproBundle
+
+            try:
+                body = await request.json()
+                bundle = ReproBundle.model_validate(body)
+            except Exception as exc:
+                return JSONResponse(
+                    {"error": "Bad Request", "message": f"Invalid ReproBundle JSON: {exc}"},
+                    status_code=400,
+                )
+
+            async def _dummy_executor(sc_id, tool_name, args):
+                return {"status": "replayed", "tool": tool_name}
+
+            report = await ReplayEngine.replay_bundle(bundle, _dummy_executor)
+            return JSONResponse(report.model_dump())
+
+        async def scenarios_chaos_endpoint(request):
+            """POST /scenarios/{scenario_id}/chaos: Add dynamic chaos fault injection rules."""
+            from mock_mcp_gateway.chaos import FaultRule, FaultType, chaos_engine
+
+            scenario_id = request.path_params.get("scenario_id")
+            try:
+                data = await request.json()
+            except Exception:
+                data = {}
+
+            ftype_str = data.get("fault_type", "latency")
+            try:
+                ftype = FaultType(ftype_str)
+            except ValueError:
+                ftype = FaultType.LATENCY
+
+            rule = FaultRule(
+                scenario_id=scenario_id,
+                tool_name=data.get("tool_name", "*"),
+                fault_type=ftype,
+                rate=float(data.get("rate", 1.0)),
+                delay_ms=float(data.get("delay_ms", 0.0)),
+                error_message=data.get("error_message", "Simulated chaos fault"),
+                http_status=data.get("http_status"),
+            )
+            rule_id = chaos_engine.add_rule(rule)
+            return JSONResponse({"status": "active", "rule_id": rule_id, "rule": rule.model_dump()})
+
+        async def clear_chaos_endpoint(request):
+            """DELETE /scenarios/{scenario_id}/chaos: Clear fault rules for a scenario."""
+            from mock_mcp_gateway.chaos import chaos_engine
+
+            scenario_id = request.path_params.get("scenario_id")
+            cleared = chaos_engine.clear_rules(scenario_id=scenario_id)
+            return JSONResponse({"status": "cleared", "scenario_id": scenario_id, "cleared_count": cleared})
+
+        async def create_snapshot_endpoint(request):
+            """POST /sessions/{session_id}/snapshots: Create time-travel state snapshot."""
+            session_id = request.path_params.get("session_id")
+            try:
+                data = await request.json()
+            except Exception:
+                data = {}
+
+            label = data.get("label", "")
+            session = session_manager.get_session(session_id=session_id)
+            snap_id = session.create_snapshot(label=label)
+            return JSONResponse({"status": "created", "session_id": session_id, "snapshot_id": snap_id}, status_code=201)
+
+        async def restore_snapshot_endpoint(request):
+            """POST /sessions/{session_id}/snapshots/restore: Rollback session state to snapshot."""
+            session_id = request.path_params.get("session_id")
+            try:
+                data = await request.json()
+            except Exception:
+                data = {}
+
+            snap_id = data.get("snapshot_id")
+            if not snap_id:
+                return JSONResponse({"error": "Bad Request", "message": "Missing 'snapshot_id'"}, status_code=400)
+
+            session = session_manager.get_session(session_id=session_id)
+            ok = session.restore_snapshot(snap_id)
+            if not ok:
+                return JSONResponse({"error": "Not Found", "message": f"Snapshot '{snap_id}' not found"}, status_code=404)
+
+            return JSONResponse({"status": "restored", "session_id": session_id, "snapshot_id": snap_id})
+
+        # Pre-instantiate sub_apps for mounted scenarios
+        mounted_sub_apps: Dict[str, Starlette] = {}
+        for sc in gateway_scenarios:
+            instance = self.instances[sc.id]
+            mounted_sub_apps[sc.id] = instance.http_app(transport=sc.transport)
+
+        @contextlib.asynccontextmanager
+        async def gateway_lifespan(app_instance: Starlette):
+            async with contextlib.AsyncExitStack() as stack:
+                for sc_id, sub_app in mounted_sub_apps.items():
+                    if hasattr(sub_app, "lifespan") and callable(sub_app.lifespan):
+                        await stack.enter_async_context(sub_app.lifespan(sub_app))
+                yield
+
         routes = [
             Route("/", homepage, methods=["GET"]),
+            Route("/metrics", metrics_endpoint, methods=["GET"]),
             Route("/scenarios", list_scenarios_endpoint, methods=["GET"]),
             Route("/scenarios/select", select_scenario_endpoint, methods=["POST"]),
             Route("/scenarios/clear", clear_scenario_endpoint, methods=["POST"]),
+            Route("/scenarios/multiplexed/tools", multiplexed_tools_endpoint, methods=["GET"]),
             Route("/scenarios/{scenario_id}/tools", scenario_tools_endpoint, methods=["GET"]),
+            Route("/scenarios/{scenario_id}/chaos", scenarios_chaos_endpoint, methods=["POST"]),
+            Route("/scenarios/{scenario_id}/chaos", clear_chaos_endpoint, methods=["DELETE"]),
             Route("/sessions", list_sessions_endpoint, methods=["GET"]),
             Route("/sessions", create_session_endpoint, methods=["POST"]),
             Route("/sessions/close", close_session_endpoint, methods=["POST"]),
             Route("/sessions/{session_id}", close_session_endpoint, methods=["DELETE"]),
+            Route("/sessions/{session_id}/trace", session_trace_endpoint, methods=["GET"]),
+            Route("/sessions/{session_id}/repro", export_repro_endpoint, methods=["GET"]),
+            Route("/sessions/{session_id}/snapshots", create_snapshot_endpoint, methods=["POST"]),
+            Route("/sessions/{session_id}/snapshots/restore", restore_snapshot_endpoint, methods=["POST"]),
+            Route("/repro/replay", replay_repro_endpoint, methods=["POST"]),
             Route("/tools", list_tools_endpoint, methods=["GET"]),
             Route("/tools/{tool_name}", get_tool_endpoint, methods=["GET"]),
         ]
-        app = Starlette(routes=routes)
+        app = Starlette(routes=routes, lifespan=gateway_lifespan)
 
-        # Mount each enabled scenario under its configured prefix
+        # Mount each enabled scenario under its configured prefix using pre-instantiated sub_app
         for sc in gateway_scenarios:
-            instance = self.instances[sc.id]
-            sub_app = instance.http_app(transport=sc.transport)
+            sub_app = mounted_sub_apps[sc.id]
 
             # Apply session middleware specific to sub-app scenario context
             fixture_state = self.scenario_fixture_states.get(sc.id, {})

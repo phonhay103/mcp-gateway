@@ -1,12 +1,13 @@
 """
 Common Enterprise Authentication Layer for Mock MCP Gateway.
-Supports API Key (Header only), JWT Validation, Timing Attack Protection, and Loguru Audit Logging.
+Supports API Key (Header only), JWT Validation, Timing Attack Protection,
+Granular Per-Call Tool Execution Authorization, and Loguru Audit Logging.
 Enforces removal of weak protocols (e.g. Query Parameter authentication).
 Pydantic v2 Models used for configuration and client credential management.
 """
 
 import hmac
-from typing import Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import jwt
 from pydantic import BaseModel, Field, field_validator
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -25,6 +26,10 @@ class APIKeyInfo(BaseModel):
         default_factory=lambda: {"*"},
         description="Set of allowed server names or {'*'} for all",
     )
+    allowed_tools: Set[str] = Field(
+        default_factory=lambda: {"*"},
+        description="Set of allowed tool names/patterns or {'*'} for all",
+    )
 
     @field_validator("allowed_servers", mode="before")
     @classmethod
@@ -37,8 +42,49 @@ class APIKeyInfo(BaseModel):
             return v
         return {"*"}
 
+    @field_validator("allowed_tools", mode="before")
+    @classmethod
+    def validate_allowed_tools(cls, v) -> Set[str]:
+        if isinstance(v, list):
+            return set(v)
+        if isinstance(v, str):
+            return {v}
+        if isinstance(v, set):
+            return v
+        return {"*"}
+
     def can_access(self, server_name: str) -> bool:
         return "*" in self.allowed_servers or server_name in self.allowed_servers
+
+    def can_execute_tool(self, tool_name: str) -> bool:
+        """Check if client credentials permit executing a specific tool."""
+        if "*" in self.allowed_tools or "all" in self.allowed_tools:
+            return True
+        if tool_name in self.allowed_tools:
+            return True
+        for pattern in self.allowed_tools:
+            if pattern.endswith("*") and tool_name.startswith(pattern[:-1]):
+                return True
+        return False
+
+
+class PerCallAuthorizer:
+    """
+    Granular Per-Call Authorization Engine evaluating claims for JSON-RPC tool executions.
+    """
+
+    @staticmethod
+    def authorize_tool_call(
+        key_info: APIKeyInfo,
+        tool_name: str,
+        tool_args: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[bool, str]:
+        """
+        Evaluates whether the authenticated client is permitted to execute a specific tool call.
+        """
+        if key_info.can_execute_tool(tool_name):
+            return True, f"Client '{key_info.name}' is authorized for tool '{tool_name}'."
+        return False, f"Client '{key_info.name}' is NOT authorized to execute tool '{tool_name}'."
 
 
 class AuthConfig(BaseModel):
@@ -53,6 +99,7 @@ class AuthConfig(BaseModel):
         default_factory=lambda: [
             "/",
             "/health",
+            "/metrics",
             "/favicon.ico",
             "/scenarios",
             "/scenarios/select",
@@ -139,7 +186,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
             )
             client_name = payload.get("sub", payload.get("name", "jwt-client"))
             allowed_servers = payload.get("allowed_servers", ["*"])
-            return APIKeyInfo(name=client_name, key=token, allowed_servers=allowed_servers)
+            allowed_tools = payload.get("allowed_tools", ["*"])
+            return APIKeyInfo(
+                name=client_name,
+                key=token,
+                allowed_servers=allowed_servers,
+                allowed_tools=allowed_tools,
+            )
         except (jwt.PyJWTError, Exception):
             return None
 
@@ -163,12 +216,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if not self.auth_config.enabled:
             return await call_next(request)
 
-        # Allow anonymous public paths or management endpoints (/sessions/*, /scenarios/*, /tools/*)
+        # Allow anonymous public paths or management endpoints (/sessions/*, /scenarios/*, /tools/*, /metrics)
         if (
             request.url.path in self.auth_config.allow_anonymous_paths
             or request.url.path.startswith("/sessions")
             or request.url.path.startswith("/scenarios")
             or request.url.path.startswith("/tools")
+            or request.url.path.startswith("/metrics")
         ):
             return await call_next(request)
 
@@ -231,8 +285,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 status_code=403,
             )
 
-        # Attach client info & audit success
+        # Attach client info & key info for per-call authorization
         request.state.client_name = key_info.name
+        request.state.key_info = key_info
         log_audit_event("AUTH_SUCCESS", request, 200, client_name=key_info.name)
 
         return await call_next(request)

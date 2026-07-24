@@ -43,9 +43,54 @@ class SessionData(BaseModel):
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     last_active: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     state: Dict[str, Any] = Field(default_factory=dict)
+    snapshots: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
 
     def touch(self) -> None:
         self.last_active = datetime.now(timezone.utc).isoformat()
+
+    def create_snapshot(self, label: str = "") -> str:
+        """Create a time-travel snapshot of current state."""
+        snap_id = f"snap_{len(self.snapshots) + 1}_{generate_uuid7()[:8]}"
+        self.snapshots[snap_id] = {
+            "snapshot_id": snap_id,
+            "label": label or f"Snapshot {len(self.snapshots) + 1}",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "state": copy.deepcopy(self.state),
+        }
+        logger.info(f"Created snapshot '{snap_id}' [{label}] for session '{self.session_id}'")
+        return snap_id
+
+    def restore_snapshot(self, snapshot_id: str) -> bool:
+        """Restore session state to a previously saved snapshot."""
+        if snapshot_id not in self.snapshots:
+            logger.error(f"Snapshot '{snapshot_id}' not found in session '{self.session_id}'")
+            return False
+        self.state = copy.deepcopy(self.snapshots[snapshot_id]["state"])
+        self.touch()
+        logger.info(f"Restored session '{self.session_id}' to snapshot '{snapshot_id}'")
+        return True
+
+    def list_snapshots(self) -> List[Dict[str, Any]]:
+        """List summary of saved state snapshots."""
+        return [
+            {
+                "snapshot_id": snap_id,
+                "label": snap["label"],
+                "created_at": snap["created_at"],
+            }
+            for snap_id, snap in self.snapshots.items()
+        ]
+
+    def diff_snapshots(self, snap1_id: str, snap2_id: str) -> Dict[str, Any]:
+        """Compute state difference between two snapshots."""
+        s1 = self.snapshots.get(snap1_id, {}).get("state", {})
+        s2 = self.snapshots.get(snap2_id, {}).get("state", {})
+        diff = {}
+        all_keys = set(s1.keys()) | set(s2.keys())
+        for k in all_keys:
+            if s1.get(k) != s2.get(k):
+                diff[k] = {"before": s1.get(k), "after": s2.get(k)}
+        return diff
 
     @property
     def user_db(self) -> Dict[str, Any]:
