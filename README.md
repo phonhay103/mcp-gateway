@@ -90,7 +90,49 @@ Hệ thống loại bỏ hoàn toàn giao thức STDIO để chuẩn hóa **100%
 | Lệnh | Mô tả |
 | :--- | :--- |
 | `make install` | Cài đặt các thư viện phụ thuộc bằng `uv` với Python 3.14 |
-| `make test` | Chạy bộ kiểm thử tự động pytest (56 bài tests) trên Python 3.14 |
-| `make run` / `make run-hybrid` | Enterprise Hybrid Mode (Port 8000 + Ports 8001..8003) |
-| `make run-gateway` | Chạy Port chung Gateway (`port 8000`) |
+| `make test` | Chạy bộ kiểm thử tự động pytest trên Python 3.14 |
+| `make run` / `make run-gateway` | Chạy Enterprise Unified Gateway (Cổng chung 8000 duy nhất, không expose port riêng cho từng mock) |
 | `make up` | Khởi chạy Docker Compose Gateway ở background |
+
+---
+
+## 🤖 Tích Hợp Claude Desktop / Cursor & CI/CD Regression Replay Pipelines
+
+### 1. Tích Hợp Claude Desktop / Cursor (`claude_desktop_config.json`)
+Để kết nối Claude Desktop hoặc Cursor tới Enterprise Dynamic Scenario MCP Gateway qua chuẩn Streamable HTTP, cấu hình tệp `claude_desktop_config.json` của bạn như sau:
+
+```json
+{
+  "mcpServers": {
+    "enterprise-mcp-gateway": {
+      "url": "http://localhost:8000/mcp"
+    }
+  }
+}
+```
+
+### 2. CI/CD Automated Regression Replay Pipelines
+Mỗi khi xảy ra lỗi trong quá trình sản xuất hoặc kiểm thử AI agents, hệ thống tự động sinh ra gói `.mcp-repro.json`. Bạn có thể tích hợp kiểm thử hồi quy tự động trong GitHub Actions:
+
+```yaml
+name: MCP Gateway Regression Replay
+on: [push, pull_request]
+jobs:
+  replay-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.14 & uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+      - name: Install dependencies
+        run: uv sync
+      - name: Run Pytest Regression Suite
+        run: uv run pytest tests/test_mcp_real_world_debugging.py
+```
+
+### 3. Containerized Deployment (Docker & Docker Compose)
+- **Build Image**: `docker build -t enterprise-mcp-gateway:latest .`
+- **Run Compose**: `docker compose up -d` (Khởi chạy Gateway kèm Prometheus/Grafana metrics monitoring).
+

@@ -29,9 +29,9 @@ def main():
     parser.add_argument(
         "--mode",
         type=str,
-        default=os.getenv("MCP_MODE", "hybrid"),
-        choices=["gateway", "multi-port", "hybrid", "single"],
-        help="Server run mode: 'gateway' (shared port 8000), 'multi-port' (dedicated ports 8001..), 'hybrid' (both), or 'single'",
+        default=os.getenv("MCP_MODE", "gateway"),
+        choices=["gateway", "single"],
+        help="Server run mode: 'gateway' (shared port 8000 via unified gateway & adapters) or 'single'",
     )
     parser.add_argument(
         "--transport",
@@ -57,17 +57,11 @@ def main():
 
     config_file = Path(args.config)
 
-    # If mode is gateway, multi-port, or hybrid and config exists, use ServerManager
-    if args.mode in ("gateway", "multi-port", "hybrid") and config_file.exists():
+    # If mode is gateway and config exists, use ServerManager
+    if args.mode == "gateway" and config_file.exists():
         logger.info(f"Loading Enterprise Multi-MCP configuration from: {config_file}")
         manager = ServerManager(config_file)
-
-        if args.mode == "gateway":
-            manager.run_gateway()
-        elif args.mode == "multi-port":
-            manager.run_multi_port()
-        elif args.mode == "hybrid":
-            manager.run_hybrid()
+        manager.run_gateway()
     else:
         # Fallback to single server mode (Streamable HTTP)
         logger.info(f"Starting single Mock MCP Server using transport '{args.transport}'...")

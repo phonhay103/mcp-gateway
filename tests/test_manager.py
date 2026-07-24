@@ -30,11 +30,8 @@ def test_server_manager_load_yaml(tmp_path: Path):
                 "name": "srv1",
                 "description": "Server 1",
                 "transport": "streamable-http",
-                "host": "127.0.0.1",
-                "port": 9001,
                 "prefix": "/srv1",
                 "enable_gateway": True,
-                "enable_standalone": True,
                 "tools": ["echo"],
                 "resources": [],
                 "prompts": [],
@@ -43,11 +40,8 @@ def test_server_manager_load_yaml(tmp_path: Path):
                 "name": "srv2",
                 "description": "Server 2",
                 "transport": "streamable-http",
-                "host": "127.0.0.1",
-                "port": 9002,
                 "prefix": "/srv2",
                 "enable_gateway": True,
-                "enable_standalone": False,
                 "tools": ["calculate"],
                 "resources": [],
                 "prompts": [],
@@ -62,8 +56,8 @@ def test_server_manager_load_yaml(tmp_path: Path):
     manager = ServerManager(config_file)
     assert manager.gateway_port == 9000
     assert len(manager.server_configs) == 2
-    assert manager.server_configs[0].enable_standalone is True
-    assert manager.server_configs[1].enable_standalone is False
+    assert manager.server_configs[0].enable_gateway is True
+    assert manager.server_configs[1].enable_gateway is True
     assert "srv1" in manager.instances
     assert "srv2" in manager.instances
 
@@ -76,8 +70,6 @@ def test_server_manager_gateway_app(tmp_path: Path):
                 "name": "srv1",
                 "description": "Server 1",
                 "transport": "streamable-http",
-                "host": "127.0.0.1",
-                "port": 8001,
                 "prefix": "/srv1",
                 "tools": ["echo"],
             }

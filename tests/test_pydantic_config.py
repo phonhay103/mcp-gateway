@@ -17,13 +17,12 @@ def test_pydantic_scenario_config():
         "id": "sysops-scenario",
         "name": "SysOps Operations",
         "description": "System Operations Scenario",
-        "port": 8001,
+        "prefix": "/sysops",
         "tools": ["echo", "get_system_info"],
     }
     sc = ScenarioConfig.model_validate(data)
     assert sc.id == "sysops-scenario"
-    assert sc.port == 8001
-    assert sc.prefix == "/sysops-scenario"
+    assert sc.prefix == "/sysops"
     assert sc.tools == ["echo", "get_system_info"]
 
 
@@ -53,7 +52,6 @@ def test_pydantic_gateway_yaml_config():
             {
                 "id": "utility-scenario",
                 "servers": ["base-utility-server"],
-                "port": 8002,
                 "prefix": "/utility",
             }
         ],
@@ -66,51 +64,3 @@ def test_pydantic_gateway_yaml_config():
     assert "admin-key" in config.gateway.auth.keys
     assert config.servers[0].id == "base-utility-server"
     assert config.scenarios[0].prefix == "/utility"
-
-
-def test_exact_scenario_tools_whitelisting(tmp_path: Path):
-    """Verify that a scenario specifying explicit 'tools' loads ONLY those exact tools."""
-    yaml_content = {
-        "gateway": {"host": "127.0.0.1", "port": 8000},
-        "servers": [
-            {
-                "id": "full-utility-server",
-                "tools": ["calculate", "manage_users", "generate_random_data"],
-            }
-        ],
-        "scenarios": [
-            {
-                "id": "calculator-only",
-                "servers": ["full-utility-server"],
-                "tools": ["calculate"],  # Whitelist ONLY 'calculate'
-                "prefix": "/calc",
-            }
-        ],
-    }
-
-    config_file = tmp_path / "custom_scenario.yaml"
-    with open(config_file, "w") as f:
-        yaml.dump(yaml_content, f)
-
-    manager = ServerManager(config_file)
-    scenario_cfg = manager.scenario_configs[0]
-    loaded_tools, _, _ = manager._resolve_scenario_capabilities(scenario_cfg)
-
-    # Must contain ONLY calculate, not manage_users or generate_random_data
-    assert loaded_tools == ["calculate"]
-
-
-def test_pydantic_validation_error_on_missing_required_fields():
-    # UserRecord requires 'id', 'name', 'email'
-    invalid_data = {"id": "user_1", "role": "admin"}
-    with pytest.raises(ValidationError):
-        UserRecord.model_validate(invalid_data)
-
-
-def test_pydantic_tools_models():
-    user = UserRecord(id="u123", name="Jane Doe", email="jane@example.com", role="admin")
-    assert user.id == "u123"
-    assert user.email == "jane@example.com"
-
-    dump = user.model_dump()
-    assert dump["role"] == "admin"

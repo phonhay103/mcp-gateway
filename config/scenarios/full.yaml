@@ -3,11 +3,8 @@ id: "full-scenario"
 name: "Full Enterprise Sandbox Scenario"
 description: "Scenario tích hợp ghép nối cả 2 MCP Servers"
 transport: "streamable-http"
-host: "0.0.0.0"
-port: 8003
 prefix: "/full"
 enable_gateway: true
-enable_standalone: true
 
 # Scenario tổng hợp nhiều MCP Servers
 servers:
