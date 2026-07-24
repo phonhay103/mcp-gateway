@@ -2,7 +2,6 @@
 id: "utility-scenario"
 name: "Utility Scenario"
 description: "Scenario chuyên biệt xử lý tính toán và quản lý dữ liệu"
-transport: "streamable-http"
 prefix: "/utility"
 enable_gateway: true
 

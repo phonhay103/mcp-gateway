@@ -2,7 +2,6 @@
 id: "sysops-scenario"
 name: "SysOps Monitoring Scenario"
 description: "Scenario chuyên biệt cho việc kiểm tra hạ tầng và ping mạng"
-transport: "streamable-http"
 prefix: "/sysops"
 enable_gateway: true
 
