@@ -121,6 +121,22 @@ def create_gateway_routes(server_manager: Any) -> List[Route]:
         logs = adapter_registry.get_adapter_logs(name)
         return JSONResponse({"status": "success", "adapter_name": name, "count": len(logs), "logs": logs})
 
+    async def get_adapter_tools_endpoint(request):
+        """GET /adapters/{name}/tools: List all tools provided by a specific MCP adapter/server."""
+        name = request.path_params.get("name")
+        adapter = adapter_registry.get_adapter(name)
+        if not adapter:
+            return JSONResponse({"error": "Not Found", "message": f"Adapter '{name}' not found"}, status_code=404)
+        
+        tools_list = []
+        for t_name in adapter.tools:
+            t_def = schema_registry.get_tool(t_name)
+            if t_def:
+                tools_list.append(t_def.to_mcp_format())
+            else:
+                tools_list.append({"name": t_name})
+        return JSONResponse({"status": "success", "adapter_name": name, "count": len(tools_list), "tools": tools_list})
+
     async def update_adapter_endpoint(request):
         """PUT /adapters/{name}: Update configuration or status of a plugged-in adapter."""
         name = request.path_params.get("name")
@@ -565,6 +581,7 @@ def create_gateway_routes(server_manager: Any) -> List[Route]:
         Route("/adapters/{name}", get_adapter_endpoint, methods=["GET"]),
         Route("/adapters/{name}/status", get_adapter_status_endpoint, methods=["GET"]),
         Route("/adapters/{name}/logs", get_adapter_logs_endpoint, methods=["GET"]),
+        Route("/adapters/{name}/tools", get_adapter_tools_endpoint, methods=["GET"]),
         Route("/adapters/{name}", update_adapter_endpoint, methods=["PUT"]),
         Route("/adapters/{name}", delete_adapter_endpoint, methods=["DELETE"]),
         Route("/metrics", metrics_endpoint, methods=["GET"]),

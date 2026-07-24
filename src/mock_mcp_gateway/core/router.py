@@ -70,24 +70,44 @@ class ToolGatewayRouter:
         if method == "notifications/initialized":
             return JSONResponse({"jsonrpc": "2.0", "result": {}})
 
-        # 3. Handle tools/list method (Aggregates across all running adapters)
+        # 3. Handle tools/list method (Aggregates across all running adapters, handling duplicate names with namespace qualification)
         if method == "tools/list":
+            filter_servers = params.get("servers") or params.get("adapters") or params.get("mcp")
+            if not filter_servers:
+                q_mcp = request.query_params.get("mcp") or request.query_params.get("servers")
+                if q_mcp:
+                    filter_servers = [s.strip() for s in q_mcp.split(",") if s.strip()]
+
             aggregated_tools = []
+            seen_tools = set()
             running_adapters = adapter_registry.list_adapters()
 
             for adapter in running_adapters:
                 if adapter.status != AdapterStatus.RUNNING:
                     continue
+                if filter_servers and adapter.name not in filter_servers:
+                    continue
 
                 for tool_name in adapter.tools:
                     tool_def = schema_registry.get_tool(tool_name)
-                    if tool_def:
+                    if not tool_def:
+                        continue
+
+                    # 1. Add standard tool if not already seen
+                    if tool_name not in seen_tools:
                         mcp_formatted = tool_def.to_mcp_format()
-                        # Sanitize description
                         mcp_formatted["description"] = ToolDescriptionSanitizer.sanitize_description(
                             mcp_formatted.get("description", "")
                         )
                         aggregated_tools.append(mcp_formatted)
+                        seen_tools.add(tool_name)
+
+                    # 2. Always expose fully-qualified namespaced version (adapter::tool) to resolve collisions explicitly
+                    qualified_name = f"{adapter.name}::{tool_name}"
+                    qual_formatted = tool_def.to_mcp_format()
+                    qual_formatted["name"] = qualified_name
+                    qual_formatted["description"] = f"[{adapter.name}] {ToolDescriptionSanitizer.sanitize_description(tool_def.description)}"
+                    aggregated_tools.append(qual_formatted)
 
             metrics_collector.record_request("POST", "/mcp", 200)
             return JSONResponse({
@@ -98,15 +118,25 @@ class ToolGatewayRouter:
 
         # 4. Handle tools/call method
         if method == "tools/call":
-            tool_name = params.get("name")
+            raw_tool_name = params.get("name")
             tool_args = params.get("arguments", {})
 
-            if not tool_name:
+            if not raw_tool_name:
                 return JSONResponse({
                     "jsonrpc": "2.0",
                     "id": req_id,
                     "error": {"code": -32602, "message": "Missing 'name' in tools/call parameters"},
                 }, status_code=400)
+
+            # Handle namespaced or explicit server targeting
+            target_server = params.get("server") or params.get("adapter") or params.get("mcp")
+            actual_tool_name = raw_tool_name
+            if "::" in raw_tool_name:
+                parts = raw_tool_name.split("::", 1)
+                target_server = parts[0]
+                actual_tool_name = parts[1]
+
+            tool_name = actual_tool_name
 
             # Evaluate Per-Call Authorization
             client_info = getattr(request.state, "auth_client", None)
@@ -158,12 +188,52 @@ class ToolGatewayRouter:
                         "result": fault.malformed_response,
                     })
 
-            # Identify target adapter handling this tool
+            # Identify target adapter handling this tool with duplicate collision resolution & scenario priority
             target_adapter = None
-            for adapter in adapter_registry.list_adapters():
-                if tool_name in adapter.tools and adapter.status == AdapterStatus.RUNNING:
-                    target_adapter = adapter
-                    break
+            candidate_adapters = []
+
+            # 1. Prioritize adapter matching current scenario_id if valid
+            if scenario_id and scenario_id != "default_scenario":
+                sc_adapter = adapter_registry.get_adapter(scenario_id)
+                if sc_adapter and sc_adapter.status == AdapterStatus.RUNNING and tool_name in sc_adapter.tools:
+                    target_adapter = sc_adapter
+
+            if not target_adapter:
+                if target_server:
+                    adapter = adapter_registry.get_adapter(target_server)
+                    if adapter and adapter.status == AdapterStatus.RUNNING and tool_name in adapter.tools:
+                        target_adapter = adapter
+                    if not target_adapter:
+                        return JSONResponse({
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "error": {
+                                "code": -32602,
+                                "message": f"Target MCP server/adapter '{target_server}' not found or does not provide tool '{tool_name}'",
+                            },
+                        }, status_code=400)
+                else:
+                    for adapter in adapter_registry.list_adapters():
+                        if tool_name in adapter.tools and adapter.status == AdapterStatus.RUNNING:
+                            candidate_adapters.append(adapter)
+
+                    if len(candidate_adapters) == 1:
+                        target_adapter = candidate_adapters[0]
+                    elif len(candidate_adapters) > 1:
+                        candidate_names = [a.name for a in candidate_adapters]
+                        return JSONResponse({
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "error": {
+                                "code": -32603,
+                                "message": (
+                                    f"Ambiguous tool name collision: Tool '{tool_name}' is provided by multiple MCP adapters: {candidate_names}. "
+                                    f"Please specify 'server': '<adapter_name>' in parameters, use fully qualified name '<adapter_name>::{tool_name}', or set scenario context."
+                                ),
+                            },
+                        }, status_code=400)
+                    else:
+                        target_adapter = None
 
             execution_result = None
             is_error = False

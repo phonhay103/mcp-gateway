@@ -143,9 +143,19 @@ class UpstreamProxyRegistry:
                 "error": {"code": -32002, "message": f"Upstream MCP Server '{server_id}' not found in registry"},
             }
 
+        # W3C Trace Context Propagation
+        traceparent = headers_override.get("traceparent") if headers_override else None
+        if not traceparent:
+            import uuid
+            # Generate valid W3C traceparent (version 00, 32-hex trace_id, 16-hex parent_id, flags 01)
+            tid = uuid.uuid4().hex
+            pid = uuid.uuid4().hex[:16]
+            traceparent = f"00-{tid}-{pid}-01"
+
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
+            "traceparent": traceparent,
             **srv.headers,
         }
         if headers_override:

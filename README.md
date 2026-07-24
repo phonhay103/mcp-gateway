@@ -4,6 +4,32 @@ Hệ thống **Enterprise Dynamic Scenario MCP Gateway** phát triển trên **P
 
 ---
 
+## 🏛️ Sơ Đồ Kiến Trúc Hệ Thống (Architecture Diagram)
+
+```mermaid
+graph TD
+    Client[Client / Claude Desktop / Cursor] -->|Streamable HTTP / JSON-RPC| Gateway["Enterprise Unified Gateway (:8000)"]
+
+    subgraph Gateway ["Enterprise Unified Gateway (Shared Port 8000)"]
+        Sec["Security & Auth Middleware<br/>- API Key / JWT<br/>- Rate Limiting<br/>- OWASP & DNS Rebinding Defense"] --> Router
+        Router["Global Tool Gateway Router<br/>POST /mcp"]
+        CP["Control Plane APIs<br/>- /adapters (Plug-In/Plug-Out)<br/>- /servers/register<br/>- /sessions & /repro"]
+        Obs["Observability & Debug Engine<br/>- Chaos Fault Injection<br/>- Time-Travel Snapshots<br/>- Trace Recorder & HMAC Audit<br/>- Prometheus / OpenTelemetry"]
+    end
+
+    Router --> AdaptersMgr["Plug-In / Plug-Out Adapters Manager"]
+
+    subgraph Adapters ["Registered Adapters"]
+        LocalMock["Local Mock / Scenario Server<br/>- SysOps / Utility<br/>- Whitelisted Tools"]
+        ExtProxy["External Real MCP Server<br/>- Upstream Proxy<br/>- Hash-Pinning & Sanitizer"]
+    end
+
+    AdaptersMgr --> LocalMock
+    AdaptersMgr --> ExtProxy
+```
+
+---
+
 ## 🐍 Yêu Cầu Môi Trường & Chuẩn Hóa Runtime
 
 - **Python Version**: `3.14` (Cấu hình chuẩn hóa qua `.python-version`, `pyproject.toml` (`requires-python = ">=3.14"`), `Dockerfile` (`python:3.14-slim`), và `uv.lock`).
@@ -32,9 +58,19 @@ Hệ thống coi mọi MCP Server—dù là **Local Mock Server**, **Dynamic Sce
    - **Trace Recording & Repro Bundle**: Tự động ghi vết trace và xuất gói `.mcp-repro.json` để replay.
    - **Security Guards**: SHA-256 Schema Hash-Pinning, Tool Description Sanitizer, Per-Call Authorization.
 
----
+## 🎯 Tính Năng Lọc Theo Các MCP Cụ Thể (Specific MCP Filtering)
 
-## 🔀 Global Tool Gateway Router (`POST /mcp`)
+Hệ thống hỗ trợ lọc và định tuyến yêu cầu theo các MCP server / adapter cụ thể trên cả Data Plane (`POST /mcp`), Control Plane (`/adapters/{name}/tools`), và Meta-Tools (`find_tools`):
+
+1. **Lọc Danh Sách Công Cụ (`tools/list` & `GET /adapters/{name}/tools`)**:
+   - **JSON-RPC (`POST /mcp`)**: Truyền tham số `params: {"servers": ["utility-scenario"]}` hoặc query string `?mcp=utility-scenario,sysops-scenario` để chỉ lấy danh sách công cụ từ các MCP server được chỉ định.
+   - **REST API**: Gọi `GET /adapters/{name}/tools` để xem toàn bộ công cụ của riêng một adapter/server cụ thể.
+2. **Điều Tuyến Trực Tiếp (`tools/call`)**:
+   - Khi gọi công cụ qua `POST /mcp`, client có thể chỉ định rõ adapter xử lý bằng tham số `params: {"name": "...", "server": "utility-scenario"}` (hoặc `adapter` / `mcp`). Gateway sẽ định tuyến trực tiếp tới adapter đó thay vì quét toàn bộ hệ thống.
+3. **Lọc Tìm Kiếm Thông Minh (`find_tools`)**:
+   - Meta-tool `find_tools(query, top_k=3, mcp_filter=["utility-scenario"])` cho phép giới hạn phạm vi tìm kiếm ngữ nghĩa chỉ trong các MCP server cụ thể.
+
+---
 
 Endpoint tập trung **`POST /mcp`** hoạt động như một Intelligent Router:
 - **Tự động hợp nhất (Aggregate)** danh mục công cụ từ tất cả các Plug-In Adapters đang chạy (`Running`).
