@@ -12,7 +12,6 @@ from starlette.responses import JSONResponse, Response
 
 from mock_mcp_gateway.core.adapters import AdapterStatus, AdapterType, adapter_registry
 from mock_mcp_gateway.security.auth import PerCallAuthorizer
-from mock_mcp_gateway.core.chaos import chaos_engine
 from mock_mcp_gateway.logger import logger
 from mock_mcp_gateway.observability.metrics import metrics_collector
 from mock_mcp_gateway.core.proxy import upstream_proxy_registry
@@ -20,6 +19,9 @@ from mock_mcp_gateway.observability.recorder import trace_recorder
 from mock_mcp_gateway.core.schemas import schema_registry
 from mock_mcp_gateway.security import ToolDescriptionSanitizer, hash_pinning_guard
 from mock_mcp_gateway.session import session_manager
+from mock_mcp_gateway.core.middleware.header_validation import validate_mcp_headers
+from mock_mcp_gateway.core.middleware.chaos_middleware import evaluate_chaos
+from mock_mcp_gateway.core.extensions.mcp_extensions import task_manager
 
 
 class ToolGatewayRouter:
@@ -44,33 +46,92 @@ class ToolGatewayRouter:
         req_id = body.get("id")
         params = body.get("params", {})
 
-        # 1. Handle initialize method
-        if method == "initialize":
+        # 1. MCP 2026-07-28 Streamable HTTP Header Enforcement Middleware
+        header_error = validate_mcp_headers(request, method, req_id, params)
+        if header_error:
+            return header_error
+
+        # 2. Handle Tasks Extension Methods (MCP 2026-07-28)
+        if method in ("tasks/get", "tasks/list", "tasks/cancel", "tasks/update"):
+            task_id = params.get("taskId") or params.get("id") or "task-mock-2026-001"
+            metrics_collector.record_request("POST", "/mcp", 200)
+
+            if method == "tasks/get":
+                task = task_manager.get_task(task_id)
+                if not task:
+                    task = task_manager.create_task(task_id, "default_tool", {})
+                res_data = task
+            elif method == "tasks/update":
+                updates = params.get("inputResponses", {"status": "completed"})
+                task = task_manager.update_task(task_id, {"status": "completed", "progress": 100, "result": updates})
+                if not task:
+                    task = task_manager.create_task(task_id, "default_tool", updates)
+                res_data = task
+            elif method == "tasks/cancel":
+                success = task_manager.cancel_task(task_id)
+                res_data = {"taskId": task_id, "status": "cancelled" if success else "notFound"}
+            else: # tasks/list
+                res_data = {"tasks": list(task_manager._tasks.values())}
+
+            return JSONResponse({
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": res_data
+            })
+
+        # 3. Handle server/discover method (MCP 2026-07-28 stateless capability discovery)
+        if method == "server/discover":
+            metrics_collector.record_request("POST", "/mcp", 200)
             return JSONResponse({
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "result": {
-                    "protocolVersion": "2024-11-05",
+                    "protocolVersion": "2026-07-28",
+                    "serverInfo": {"name": "Global Tool Gateway Router", "version": "2026.07.28"},
                     "capabilities": {
+                        "statelessCore": True,
+                        "extensions": {
+                            "mcp-apps": {"supported": True, "version": "1.0"},
+                            "tasks": {"supported": True, "version": "1.0"}
+                        }
+                    },
+                    "endpoints": {"mcp": "/mcp", "adapters": "/adapters"}
+                }
+            })
+
+        # 4. Handle initialize method (Updated to MCP 2026-07-28 Spec with Stateless Core & Extensions)
+        if method == "initialize":
+            client_protocol_version = params.get("protocolVersion", "2026-07-28")
+            negotiated_version = "2026-07-28" if client_protocol_version >= "2026-07-28" else client_protocol_version
+            return JSONResponse({
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "protocolVersion": negotiated_version,
+                    "capabilities": {
+                        "statelessCore": True,
                         "experimental": {},
-                        "logging": {},
+                        "extensions": {
+                            "mcp-apps": {"supported": True, "version": "1.0"},
+                            "tasks": {"supported": True, "version": "1.0"}
+                        },
                         "prompts": {"listChanged": True},
                         "resources": {"subscribe": False, "listChanged": True},
-                        "tools": {"listChanged": True},
+                        "tools": {"listChanged": True, "cacheable": True},
                     },
                     "serverInfo": {
                         "name": "Global Tool Gateway Router",
-                        "version": "2026.1.0",
+                        "version": "2026.07.28",
                     },
-                    "instructions": "Global MCP Gateway Router orchestrating plugged-in Mock & Real MCP Servers.",
+                    "instructions": "Global MCP Gateway Router supporting MCP 2026-07-28 stateless core, extensions, and cached tool lists.",
                 },
             })
 
-        # 2. Handle notifications/initialized
+        # 5. Handle notifications/initialized
         if method == "notifications/initialized":
             return JSONResponse({"jsonrpc": "2.0", "result": {}})
 
-        # 3. Handle tools/list method (Aggregates across all running adapters, handling duplicate names with namespace qualification)
+        # 6. Handle tools/list method (Aggregates across all running adapters, handling duplicate names with namespace qualification)
         if method == "tools/list":
             filter_servers = params.get("servers") or params.get("adapters") or params.get("mcp")
             if not filter_servers:
@@ -113,10 +174,14 @@ class ToolGatewayRouter:
             return JSONResponse({
                 "jsonrpc": "2.0",
                 "id": req_id,
-                "result": {"tools": aggregated_tools},
+                "result": {
+                    "tools": aggregated_tools,
+                    "ttlMs": 30000,
+                    "cacheScope": "user"
+                },
             })
 
-        # 4. Handle tools/call method
+        # 7. Handle tools/call method
         if method == "tools/call":
             raw_tool_name = params.get("name")
             tool_args = params.get("arguments", {})
@@ -154,39 +219,22 @@ class ToolGatewayRouter:
             session = session_manager.get_session(session_id=session_id)
             initial_state = dict(session.state)
 
-            # SYSTEM-WIDE SPECIALIZED MOCK FEATURE: Chaos & Fault Injection Engine Evaluation
-            fault = chaos_engine.evaluate_and_apply_sync(scenario_id, tool_name, tool_args)
-            if fault.triggered:
+            # SYSTEM-WIDE SPECIALIZED MOCK FEATURE: Chaos & Fault Injection Middleware Evaluation
+            chaos_response = evaluate_chaos(scenario_id, tool_name, tool_args, req_id)
+            if chaos_response:
                 duration_ms = (time.time() - start_time) * 1000
-                if fault.error:
-                    # Record trace step
-                    trace_recorder.record_call(
-                        session_id=session.session_id,
-                        scenario_id=scenario_id,
-                        tool_name=tool_name,
-                        tool_args=tool_args,
-                        initial_state=initial_state,
-                        final_state=dict(session.state),
-                        duration_ms=duration_ms,
-                        is_error=True,
-                        error_details=fault.error,
-                        injected_fault=fault.model_dump(),
-                    )
-                    return JSONResponse({
-                        "jsonrpc": "2.0",
-                        "id": req_id,
-                        "result": {
-                            "content": [{"type": "text", "text": fault.error.get("message", "Chaos Fault Injected")}],
-                            "isError": True,
-                            "_meta": {"fault_type": fault.fault_type.value if fault.fault_type else "chaos"},
-                        },
-                    })
-                elif fault.malformed_response:
-                    return JSONResponse({
-                        "jsonrpc": "2.0",
-                        "id": req_id,
-                        "result": fault.malformed_response,
-                    })
+                trace_recorder.record_call(
+                    session_id=session.session_id,
+                    scenario_id=scenario_id,
+                    tool_name=tool_name,
+                    tool_args=tool_args,
+                    initial_state=initial_state,
+                    final_state=dict(session.state),
+                    duration_ms=duration_ms,
+                    is_error=True,
+                    error_details={"message": "Chaos Fault Injected"},
+                )
+                return chaos_response
 
             # Identify target adapter handling this tool with duplicate collision resolution & scenario priority
             target_adapter = None

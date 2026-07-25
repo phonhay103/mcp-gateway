@@ -40,7 +40,7 @@ def read_tool_file(
         "path": path,
         "name": tool_def.name,
         "description": tool_def.description,
-        "schema": tool_def.inputSchema.model_dump(),
+        "schema": tool_def.inputSchema,
         "session_id": session.session_id,
     }
 
@@ -56,7 +56,7 @@ def get_tool_docs(
         return ToolResult(content=f"Tool '{tool_name}' not found.", is_error=True)
 
     session = session_manager.get_session()
-    docs = f"# {tool_def.name}\n\n{tool_def.description}\n\n## Input Schema\n```json\n{json.dumps(tool_def.inputSchema.model_dump(), indent=2)}\n```"
+    docs = f"# {tool_def.name}\n\n{tool_def.description}\n\n## Input Schema\n```json\n{json.dumps(tool_def.inputSchema, indent=2)}\n```"
     return {
         "tool_name": tool_name,
         "documentation": docs,

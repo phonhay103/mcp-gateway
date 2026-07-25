@@ -60,8 +60,16 @@ def test_generate_random_data():
     assert len(res["items"]) == 3
 
 
+from unittest.mock import patch, MagicMock
+
 def test_http_ping():
-    res = http_ping("https://httpbin.org/get", timeout_seconds=2.0)
-    # Ping should return a structured result dict regardless of connectivity
-    assert "url" in res
-    assert "success" in res
+    mock_response = MagicMock()
+    mock_response.status = 200
+    mock_response.headers = {"Content-Type": "application/json"}
+    mock_response.__enter__.return_value = mock_response
+
+    with patch("urllib.request.urlopen", return_value=mock_response):
+        res = http_ping("https://httpbin.org/get", timeout_seconds=2.0)
+        assert isinstance(res, dict)
+        assert res["url"] == "https://httpbin.org/get"
+        assert res["success"] is True

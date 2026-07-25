@@ -8,43 +8,23 @@ from pathlib import Path
 import json
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
+from mcp.types import Tool
 
 from mock_mcp_gateway.logger import logger
 from mock_mcp_gateway.security import ToolDescriptionSanitizer, hash_pinning_guard
 
 
-class ToolInputSchema(BaseModel):
-    """Pydantic v2 model for MCP tool input parameter schema."""
-
-    type: str = Field(default="object", description="JSON Schema object type")
-    properties: Dict[str, Any] = Field(default_factory=dict, description="Property definitions")
-    required: List[str] = Field(default_factory=list, description="List of required parameters")
-
-    model_config = {"extra": "allow"}
-
-
-class ToolDefinition(BaseModel):
-    """Pydantic v2 model representing an individual tool schema definition."""
-
-    name: str = Field(..., description="Unique tool identifier")
-    description: str = Field(..., description="Tool functional description")
-    inputSchema: ToolInputSchema = Field(
-        default_factory=ToolInputSchema, description="MCP input schema definition"
-    )
-
-    model_config = {"extra": "allow"}
+class ToolDefinition(Tool):
+    """Tool definition subclassing native mcp.types.Tool for MCP 2026-07-28 compliance."""
 
     def sanitize(self) -> None:
         """Sanitize description to prevent prompt injection / tool poisoning."""
-        self.description = ToolDescriptionSanitizer.sanitize_description(self.description)
+        if self.description:
+            self.description = ToolDescriptionSanitizer.sanitize_description(self.description)
 
     def to_mcp_format(self) -> Dict[str, Any]:
-        """Convert to standard MCP tools/list format."""
-        return {
-            "name": self.name,
-            "description": self.description,
-            "inputSchema": self.inputSchema.model_dump(),
-        }
+        """Convert to standard MCP tools/list format using native model dump."""
+        return self.model_dump(exclude_none=True)
 
     def to_openai_format(self) -> Dict[str, Any]:
         """Convert to OpenAI / LLM function calling schema format."""
@@ -52,8 +32,8 @@ class ToolDefinition(BaseModel):
             "type": "function",
             "function": {
                 "name": self.name,
-                "description": self.description,
-                "parameters": self.inputSchema.model_dump(),
+                "description": self.description or "",
+                "parameters": self.inputSchema,
             },
         }
 

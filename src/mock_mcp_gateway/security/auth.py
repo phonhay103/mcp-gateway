@@ -95,6 +95,7 @@ class AuthConfig(BaseModel):
     header_name: str = Field(default="X-API-Key", description="Header name for API key")
     jwt_secret: str = Field(default="enterprise-secret-key", description="JWT secret key")
     jwt_algorithms: List[str] = Field(default_factory=lambda: ["HS256"], description="Allowed JWT algorithms")
+    expected_issuer: Optional[str] = Field(default=None, description="Expected authorization server issuer URL for RFC 9207 validation")
     allow_anonymous_paths: List[str] = Field(
         default_factory=lambda: [
             "/",
@@ -177,13 +178,20 @@ class AuthMiddleware(BaseHTTPMiddleware):
         return None
 
     def _validate_jwt(self, token: str) -> Optional[APIKeyInfo]:
-        """Validate JWT token claims and signature."""
+        """Validate JWT token claims, signature, and RFC 9207 Issuer (iss) parameter."""
         try:
             payload = jwt.decode(
                 token,
                 self.auth_config.jwt_secret,
                 algorithms=self.auth_config.jwt_algorithms,
             )
+            # RFC 9207 Issuer (iss) validation check if expected_issuer is configured
+            expected_issuer = getattr(self.auth_config, "expected_issuer", None)
+            token_iss = payload.get("iss")
+            if expected_issuer and token_iss and token_iss != expected_issuer:
+                logger.warning(f"RFC 9207 Issuer mismatch: expected '{expected_issuer}', got '{token_iss}'")
+                return None
+
             client_name = payload.get("sub", payload.get("name", "jwt-client"))
             allowed_servers = payload.get("allowed_servers", ["*"])
             allowed_tools = payload.get("allowed_tools", ["*"])
