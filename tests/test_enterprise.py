@@ -7,8 +7,8 @@ from starlette.responses import PlainTextResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from mock_mcp_gateway.rate_limiter import RateLimitMiddleware
-from mock_mcp_gateway.security import EnterpriseSecurityMiddleware
+from mcp_gateway.rate_limiter import RateLimitMiddleware
+from mcp_gateway.security import EnterpriseSecurityMiddleware
 
 
 def test_owasp_security_headers_and_correlation_id():

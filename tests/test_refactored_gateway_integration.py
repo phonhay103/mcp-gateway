@@ -7,8 +7,8 @@ Integration Test Suite for Refactored Architecture:
 
 import pytest
 from starlette.testclient import TestClient
-from mock_mcp_gateway.manager import ServerManager
-from mock_mcp_gateway.core.extensions.mcp_extensions import task_manager
+from mcp_gateway.manager import ServerManager
+from mcp_gateway.core.extensions.mcp_extensions import task_manager
 
 
 @pytest.fixture

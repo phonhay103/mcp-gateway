@@ -1,9 +1,9 @@
 services:
-  mock-mcp-gateway:
+  mcp-gateway:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: mock-mcp-gateway
+    container_name: mcp-gateway
     ports:
       - "8000:8000"   # Shared Gateway Port (dùng chung port, phân biệt qua prefix)
       - "8001:8001"   # Dedicated System Server Port

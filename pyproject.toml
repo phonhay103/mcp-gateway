@@ -1,5 +1,5 @@
 [project]
-name = "mock-mcp-gateway"
+name = "mcp-gateway"
 version = "0.1.0"
 description = "A mock Model Context Protocol (MCP) gateway running dynamic multi-MCP servers with Enterprise Security"
 readme = "README.md"
@@ -19,8 +19,8 @@ dev = [
 ]
 
 [project.scripts]
-mock-mcp-gateway = "mock_mcp_gateway.main:main"
-mock-mcp = "mock_mcp_gateway.main:main"
+mcp-gateway = "mcp_gateway.main:main"
+mock-mcp = "mcp_gateway.main:main"
 
 [build-system]
 requires = ["hatchling"]

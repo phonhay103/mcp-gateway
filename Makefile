@@ -18,16 +18,16 @@ test: ## Run unit tests with pytest
 run: run-hybrid ## Run in Enterprise Hybrid mode (Shared Gateway + Dedicated Ports)
 
 run-gateway: ## Run multi-MCP in Shared Gateway mode (port 8000 only)
-	uv run mock-mcp-gateway --mode gateway --config config/mcp_servers.yaml
+	uv run mcp-gateway --mode gateway --config config/mcp_servers.yaml
 
 run-multi: ## Run multi-MCP on Dedicated Ports only (8001, 8002, 8003...)
-	uv run mock-mcp-gateway --mode multi-port --config config/mcp_servers.yaml
+	uv run mcp-gateway --mode multi-port --config config/mcp_servers.yaml
 
 run-hybrid: ## Run BOTH Shared Gateway (port 8000) AND Dedicated Ports (8001, 8002...)
-	uv run mock-mcp-gateway --mode hybrid --config config/mcp_servers.yaml
+	uv run mcp-gateway --mode hybrid --config config/mcp_servers.yaml
 
 run-streamable: ## Run single MCP server in HTTP Streamable / SSE mode
-	uv run mock-mcp-gateway --mode single --transport streamable-http
+	uv run mcp-gateway --mode single --transport streamable-http
 
 build: ## Build Docker container image
 	docker compose build

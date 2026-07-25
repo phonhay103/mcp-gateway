@@ -600,7 +600,7 @@ wheels = [
 ]
 
 [[package]]
-name = "mock-mcp-gateway"
+name = "mcp-gateway"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

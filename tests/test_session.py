@@ -4,8 +4,8 @@ Verifies that 1 scenario can apply to multiple MCP servers, and multiple scenari
 """
 
 import uuid
-from mock_mcp_gateway.session import generate_uuid7, session_manager
-from mock_mcp_gateway.tools import manage_users, get_system_info
+from mcp_gateway.session import generate_uuid7, session_manager
+from mcp_gateway.tools import manage_users, get_system_info
 
 
 def test_generate_uuid7():

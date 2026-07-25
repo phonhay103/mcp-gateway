@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
-from mock_mcp_gateway.manager import ServerManager
-from mock_mcp_gateway.schemas import ToolDefinition, ToolSchemaRegistry, schema_registry
+from mcp_gateway.manager import ServerManager
+from mcp_gateway.schemas import ToolDefinition, ToolSchemaRegistry, schema_registry
 
 
 @pytest.fixture

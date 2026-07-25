@@ -9,10 +9,10 @@ Unit Test Suite for Plug-In / Plug-Out Adapters & Global Tool Gateway Router (PO
 import pytest
 from starlette.testclient import TestClient
 
-from mock_mcp_gateway.adapters import AdapterStatus, AdapterType, PlugInAdapterConfig, adapter_registry
-from mock_mcp_gateway.chaos import chaos_engine
-from mock_mcp_gateway.manager import ServerManager
-from mock_mcp_gateway.recorder import trace_recorder
+from mcp_gateway.adapters import AdapterStatus, AdapterType, PlugInAdapterConfig, adapter_registry
+from mcp_gateway.chaos import chaos_engine
+from mcp_gateway.manager import ServerManager
+from mcp_gateway.recorder import trace_recorder
 
 
 @pytest.fixture(autouse=True)
@@ -205,7 +205,7 @@ def test_mcp_filtering_features():
     assert call_res.json()["result"]["structuredContent"]["result"] == 30
 
     # 4. Test find_tools meta-tool with mcp_filter
-    from mock_mcp_gateway.tools.discovery_tools import find_tools
+    from mcp_gateway.tools.discovery_tools import find_tools
     search_res = find_tools(query="math calculation", top_k=2, mcp_filter=["utility-scenario"])
     assert search_res["matches_found"] > 0
     assert search_res["mcp_filter"] == ["utility-scenario"]

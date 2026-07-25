@@ -15,16 +15,16 @@ import asyncio
 from pathlib import Path
 from starlette.testclient import TestClient
 
-from mock_mcp_gateway.auth import APIKeyInfo, PerCallAuthorizer
-from mock_mcp_gateway.logger import create_signed_audit_record
-from mock_mcp_gateway.manager import ServerManager
-from mock_mcp_gateway.metrics import metrics_collector
-from mock_mcp_gateway.schemas import schema_registry
-from mock_mcp_gateway.security import (
+from mcp_gateway.auth import APIKeyInfo, PerCallAuthorizer
+from mcp_gateway.logger import create_signed_audit_record
+from mcp_gateway.manager import ServerManager
+from mcp_gateway.metrics import metrics_collector
+from mcp_gateway.schemas import schema_registry
+from mcp_gateway.security import (
     ToolDescriptionSanitizer,
     hash_pinning_guard,
 )
-from mock_mcp_gateway.tools import (
+from mcp_gateway.tools import (
     describe_tools,
     execute_tool_code,
     find_tools,

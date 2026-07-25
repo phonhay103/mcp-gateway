@@ -37,4 +37,4 @@ ENV PATH="/app/.venv/bin:$PATH" \
 EXPOSE 8000 8001 8002 8003
 
 # Default entry point
-CMD ["mock-mcp-gateway"]
+CMD ["mcp-gateway"]

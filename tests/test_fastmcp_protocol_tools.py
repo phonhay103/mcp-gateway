@@ -5,9 +5,9 @@ directly through the official MCP protocol (FastMCP.list_tools()) and handles to
 """
 
 import pytest
-from mock_mcp_gateway.server import mcp
-from mock_mcp_gateway.manager import ServerManager
-from mock_mcp_gateway.session import current_scenario_id, current_server_id, current_session_id, session_manager
+from mcp_gateway.server import mcp
+from mcp_gateway.manager import ServerManager
+from mcp_gateway.session import current_scenario_id, current_server_id, current_session_id, session_manager
 from pathlib import Path
 
 

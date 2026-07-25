@@ -11,8 +11,8 @@ Unit Test Suite for MCP 2026-07-28 Specification Adoption:
 
 import pytest
 from starlette.testclient import TestClient
-from mock_mcp_gateway.manager import ServerManager
-from mock_mcp_gateway.core.schemas import ToolDefinition
+from mcp_gateway.manager import ServerManager
+from mcp_gateway.core.schemas import ToolDefinition
 
 
 def test_mcp_2026_07_28_initialization_and_capabilities():

@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
-from mock_mcp_gateway.manager import ServerManager
+from mcp_gateway.manager import ServerManager
 
 
 @pytest.fixture

@@ -13,12 +13,12 @@ import json
 from pathlib import Path
 from starlette.testclient import TestClient
 
-from mock_mcp_gateway.chaos import FaultRule, FaultType, chaos_engine
-from mock_mcp_gateway.manager import ServerManager
-from mock_mcp_gateway.recorder import ReplayEngine, ReproBundle, trace_recorder
-from mock_mcp_gateway.schemas import schema_registry
-from mock_mcp_gateway.session import current_session_id, session_manager
-from mock_mcp_gateway.tools import (
+from mcp_gateway.chaos import FaultRule, FaultType, chaos_engine
+from mcp_gateway.manager import ServerManager
+from mcp_gateway.recorder import ReplayEngine, ReproBundle, trace_recorder
+from mcp_gateway.schemas import schema_registry
+from mcp_gateway.session import current_session_id, session_manager
+from mcp_gateway.tools import (
     clear_fault_rules,
     create_session_snapshot,
     diff_session_snapshots,

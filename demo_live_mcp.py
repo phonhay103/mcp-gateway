@@ -11,7 +11,7 @@ Exercises:
 
 import json
 from starlette.testclient import TestClient
-from mock_mcp_gateway.manager import ServerManager
+from mcp_gateway.manager import ServerManager
 
 
 def main():

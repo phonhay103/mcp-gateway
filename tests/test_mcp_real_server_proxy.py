@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, patch
 import httpx
 from starlette.testclient import TestClient
 
-from mock_mcp_gateway.manager import ServerManager
-from mock_mcp_gateway.proxy import (
+from mcp_gateway.manager import ServerManager
+from mcp_gateway.proxy import (
     UpstreamMCPServerConfig,
     upstream_proxy_registry,
 )

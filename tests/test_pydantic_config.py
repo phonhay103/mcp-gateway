@@ -7,9 +7,9 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from mock_mcp_gateway.auth import APIKeyInfo, AuthConfig
-from mock_mcp_gateway.manager import GatewayConfig, GatewayYamlConfig, ScenarioConfig, BaseMCPServerConfig, ServerManager
-from mock_mcp_gateway.tools import EchoOutput, SystemInfoModel, UserRecord
+from mcp_gateway.auth import APIKeyInfo, AuthConfig
+from mcp_gateway.manager import GatewayConfig, GatewayYamlConfig, ScenarioConfig, BaseMCPServerConfig, ServerManager
+from mcp_gateway.tools import EchoOutput, SystemInfoModel, UserRecord
 
 
 def test_pydantic_scenario_config():

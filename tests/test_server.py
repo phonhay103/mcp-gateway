@@ -1,6 +1,6 @@
 """Tests for Mock MCP Server Tools."""
 
-from mock_mcp_gateway.tools import (
+from mcp_gateway.tools import (
     calculate,
     echo,
     generate_random_data,

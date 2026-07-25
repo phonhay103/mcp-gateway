@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mock_mcp_gateway.manager import ServerManager
-from mock_mcp_gateway.registry import register_features
-from mock_mcp_gateway.server import create_mcp_server
+from mcp_gateway.manager import ServerManager
+from mcp_gateway.registry import register_features
+from mcp_gateway.server import create_mcp_server
 
 
 def test_create_custom_mcp_server():
