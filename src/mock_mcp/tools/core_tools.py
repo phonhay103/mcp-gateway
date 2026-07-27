@@ -67,6 +67,31 @@ def check_scenario_tool_behavior(
     # Check tool-level overrides defined in tool_behaviors
     behavior = sc.tool_behaviors.get(tool_name) if sc.tool_behaviors else None
     if behavior:
+        # Apply Tool-level Chaos Fault Injection if configured
+        if behavior.chaos:
+            import time
+            import random
+
+            # 1. Latency injection
+            if behavior.chaos.latency_ms > 0:
+                time.sleep(behavior.chaos.latency_ms / 1000.0)
+
+            # 2. Random error rate injection
+            if behavior.chaos.error_rate > 0.0:
+                if random.random() < behavior.chaos.error_rate:
+                    return ToolResult(
+                        content=f"[Chaos] Simulated random error for tool '{tool_name}' (rate={behavior.chaos.error_rate})",
+                        is_error=True
+                    )
+
+            # 3. HTTP status code simulation
+            if behavior.chaos.http_status is not None:
+                return ToolResult(
+                    content=f"[Chaos] Simulated HTTP status error {behavior.chaos.http_status} for tool '{tool_name}'",
+                    meta={"code": behavior.chaos.http_status},
+                    is_error=True
+                )
+
         # Check tool-level error definition
         if behavior.error:
             err = behavior.error
@@ -89,14 +114,6 @@ def check_scenario_tool_behavior(
             res["_is_mock"] = True
             res["scenario_id"] = sc_id
             return res
-
-    # Check error_simulations rules
-    if sc.error_simulations:
-        for rule in sc.error_simulations:
-            if rule.tool == tool_name:
-                message = rule.message or f"MCP Error simulated for tool '{tool_name}' in scenario '{sc_id}'"
-                is_err = rule.is_error if rule.is_error is not None else True
-                return ToolResult(content=message, is_error=is_err)
 
     return None
 

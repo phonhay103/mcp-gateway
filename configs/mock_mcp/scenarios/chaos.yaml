@@ -1,0 +1,16 @@
+# Scenario: Chaos & Infrastructure Monitoring
+id: "chaos-scenario"
+name: "Chaos Simulation Scenario"
+description: "Scenario chuyên biệt cho việc mô phỏng lỗi mạng, độ trễ và tỷ lệ lỗi ngẫu nhiên ở mức công cụ (tool-level)"
+
+tools:
+  - echo
+  - get_system_info
+  - http_ping
+
+tool_behaviors:
+  echo:
+    chaos:
+      latency_ms: 100       # Trễ 100ms
+      error_rate: 0.0       # Tỷ lệ lỗi 0% để tránh xung đột ngẫu nhiên
+      http_status: 503      # Giả lập lỗi HTTP 503 Service Unavailable

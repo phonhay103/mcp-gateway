@@ -54,27 +54,22 @@ class ToolErrorConfig(BaseModel):
     model_config = {"extra": "ignore"}
 
 
+class ChaosConfig(BaseModel):
+    """Pydantic v2 Model for Chaos Fault Injection Configuration inside a Scenario."""
+
+    latency_ms: int = Field(default=0, description="Delay tool execution by fixed milliseconds")
+    error_rate: float = Field(default=0.0, description="Rate of random tool failure (0.0 to 1.0)")
+    http_status: Optional[int] = Field(default=None, description="Simulate specific HTTP error statuses e.g. 429, 502, 503")
+
+    model_config = {"extra": "ignore"}
+
+
 class ToolBehaviorConfig(BaseModel):
     """Detailed tool-level configuration defining result overrides or error behavior for a specific tool in a scenario."""
 
     error: Optional[ToolErrorConfig] = Field(default=None, description="Tool-level error override definition")
     mock_result: Optional[Dict[str, Any]] = Field(default=None, description="Tool-level mock result override")
-
-    model_config = {"extra": "ignore"}
-
-
-class ErrorSimulationRule(BaseModel):
-    """Pydantic v2 model defining an MCP tool error simulation rule for a scenario."""
-
-    tool: str = Field(description="Name of the tool to simulate error for")
-    message: str = Field(
-        default="Tool execution error simulated by scenario",
-        description="Error message text returned to MCP client",
-    )
-    is_error: bool = Field(
-        default=True,
-        description="Enforce MCP standard isError: True in CallToolResult payload",
-    )
+    chaos: Optional[ChaosConfig] = Field(default=None, description="Tool-level chaos fault injection config")
 
     model_config = {"extra": "ignore"}
 
@@ -96,10 +91,6 @@ class ScenarioConfig(BaseModel):
     tool_behaviors: Dict[str, ToolBehaviorConfig] = Field(
         default_factory=dict,
         description="Detailed tool-level result overrides or MCP error definitions mapped by tool_name",
-    )
-    error_simulations: List[ErrorSimulationRule] = Field(
-        default_factory=list,
-        description="List of MCP tool error simulations for this scenario (isError: true)",
     )
 
     model_config = {"extra": "ignore"}

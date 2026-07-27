@@ -1,6 +1,7 @@
 """
 Standalone Unified Mock MCP Service Manager.
-Provides exactly one unified FastMCP server instance mounted on /mcp, with scenario resolution via headers.
+Provides exactly one unified FastMCP server instance mounted on /mcp, with scenario resolution via headers,
+and comprehensive REST APIs for scenario discovery, activation, state inspection, and reset.
 """
 
 from pathlib import Path
@@ -15,7 +16,6 @@ from starlette.routing import Route
 import uvicorn
 
 from mock_mcp.core.config import (
-    ErrorSimulationRule,
     GatewayConfig,
     GatewayYamlConfig,
     RateLimitConfig,
@@ -42,6 +42,7 @@ class ServerManager:
         self.fixture_loader: Optional[FixtureLoader] = None
         self.scenario_fixture_states: Dict[str, Dict[str, Any]] = {}
         self.instances: Dict[str, FastMCP] = {}
+        self.active_default_scenario_id: str = "default_scenario"
 
         setup_logging()
         self.load_config()
@@ -176,16 +177,6 @@ class ServerManager:
             tb_data = {}
             if sc.tool_behaviors:
                 tb_data = {t_name: tb.model_dump() for t_name, tb in sc.tool_behaviors.items()}
-            elif sc.error_simulations:
-                for sim in sc.error_simulations:
-                    tb_data[sim.tool] = {
-                        "error": {
-                            "is_error": sim.is_error,
-                            "message": sim.message,
-                            "code": None,
-                            "details": None,
-                        }
-                    }
 
             if tb_data:
                 fixture_state["_tool_behaviors"] = tb_data
@@ -205,6 +196,8 @@ class ServerManager:
             )
             self.instances[sc.id] = mcp_instance
 
+        self.active_default_scenario_id = self.scenario_configs[0].id if self.scenario_configs else "default_scenario"
+
         logger.info(
             f"Successfully loaded {len(self.scenario_configs)} Scenarios "
             f"and {len(schema_registry.tools)} Tool Schemas"
@@ -214,8 +207,6 @@ class ServerManager:
         """
         Create a Starlette ASGI application for the unified Mock MCP Service.
         """
-        default_sc_id = self.scenario_configs[0].id if self.scenario_configs else "default_scenario"
-
         # Create exactly 1 master FastMCP instance serving all potential mock tools
         master_instance = create_mcp_server(
             name="Mock MCP Server",
@@ -256,27 +247,117 @@ class ServerManager:
                 "status": "online",
                 "endpoint": "/mcp",
                 "scenarios": [sc.id for sc in self.scenario_configs],
+                "active_default_scenario_id": self.active_default_scenario_id,
                 "note": "Unified Mock MCP Server. Pass X-MCP-Scenario header to select active scenario."
             })
 
         async def health(request):
             return JSONResponse({"status": "healthy"})
 
-        async def custom_mcp_endpoint(request):
-            """Unified endpoint routing request, dynamically filtering tools and error simulation based on active scenario."""
+        # Scenario REST Management Endpoints
+        async def list_scenarios(request):
+            results = []
+            for sc in self.scenario_configs:
+                results.append({
+                    "id": sc.id,
+                    "name": sc.name,
+                    "description": sc.description,
+                    "is_default": sc.id == self.active_default_scenario_id,
+                    "tools": sc.tools,
+                    "fixtures": sc.fixtures,
+                })
+            return JSONResponse(results)
+
+        async def get_scenario(request):
+            sc_id = request.path_params["scenario_id"]
+            sc = scenario_configs_map.get(sc_id)
+            if not sc:
+                return JSONResponse({"error": f"Scenario '{sc_id}' not found"}, status_code=404)
+            return JSONResponse({
+                "id": sc.id,
+                "name": sc.name,
+                "description": sc.description,
+                "is_default": sc.id == self.active_default_scenario_id,
+                "tools": sc.tools,
+                "fixtures": sc.fixtures,
+            })
+
+        async def activate_scenario(request):
+            sc_id = request.path_params["scenario_id"]
+            if sc_id not in scenario_configs_map:
+                return JSONResponse({"error": f"Scenario '{sc_id}' not found"}, status_code=404)
+            self.active_default_scenario_id = sc_id
+            return JSONResponse({
+                "status": "activated",
+                "active_default_scenario_id": self.active_default_scenario_id
+            })
+
+        async def get_scenario_state(request):
+            sc_id = request.path_params["scenario_id"]
+            if sc_id not in scenario_configs_map:
+                return JSONResponse({"error": f"Scenario '{sc_id}' not found"}, status_code=404)
+            state = scenario_states.get(sc_id, {})
+            return JSONResponse(state)
+
+        async def update_scenario_state(request):
+            sc_id = request.path_params["scenario_id"]
+            if sc_id not in scenario_configs_map:
+                return JSONResponse({"error": f"Scenario '{sc_id}' not found"}, status_code=404)
+            try:
+                body = await request.json()
+            except Exception:
+                return JSONResponse({"error": "Invalid JSON payload"}, status_code=400)
+
+            if sc_id not in scenario_states:
+                scenario_states[sc_id] = {}
+            scenario_states[sc_id].update(body)
+            return JSONResponse({
+                "status": "updated",
+                "state": scenario_states[sc_id]
+            })
+
+        async def reset_scenario_state(request):
+            sc_id = request.path_params["scenario_id"]
+            sc = scenario_configs_map.get(sc_id)
+            if not sc:
+                return JSONResponse({"error": f"Scenario '{sc_id}' not found"}, status_code=404)
+
+            # Reload fixtures from files
+            fixture_state = self.fixture_loader.load_fixtures(sc.fixtures) if sc.fixtures else {}
+
+            # Populate original behaviors
+            tb_data = {}
+            if sc.tool_behaviors:
+                tb_data = {t_name: tb.model_dump() for t_name, tb in sc.tool_behaviors.items()}
+            if tb_data:
+                fixture_state["_tool_behaviors"] = tb_data
+
+            scenario_states[sc_id] = fixture_state
+            return JSONResponse({
+                "status": "reset",
+                "state": scenario_states[sc_id]
+            })
+
+        async def custom_mcp_endpoint(scope, receive, send):
+            """Unified ASGI endpoint routing request, dynamically filtering tools and error simulation based on active scenario."""
+            from starlette.requests import Request
+            import json
+
+            request = Request(scope, receive)
             headers = dict(request.headers)
-            active_sc = headers.get("x-mcp-scenario", default_sc_id)
+            active_sc = headers.get("x-mcp-scenario", self.active_default_scenario_id)
 
             # Restrict active_sc to a registered scenario
             if active_sc not in scenario_configs_map:
-                active_sc = default_sc_id
+                active_sc = self.active_default_scenario_id
 
             token = current_scenario_id.set(active_sc)
             try:
                 # Intercept JSON-RPC payload for tools/list and tools/call
-                if request.method == "POST":
+                if scope["type"] == "http" and scope["method"] == "POST":
                     try:
-                        body = await request.json()
+                        body_bytes = await request.body()
+                        body = json.loads(body_bytes)
                         method = body.get("method")
                         req_id = body.get("id")
 
@@ -291,13 +372,15 @@ class ServerManager:
                                 if tool_def:
                                     filtered_tools.append(tool_def.to_mcp_format())
 
-                            return JSONResponse({
+                            response = JSONResponse({
                                 "jsonrpc": "2.0",
                                 "id": req_id,
                                 "result": {
                                     "tools": filtered_tools
                                 }
                             })
+                            await response(scope, receive, send)
+                            return
 
                         elif method == "tools/call":
                             params = body.get("params", {})
@@ -305,7 +388,7 @@ class ServerManager:
                             sc = scenario_configs_map.get(active_sc)
 
                             if sc and sc.tools and tool_name not in sc.tools:
-                                return JSONResponse({
+                                response = JSONResponse({
                                     "jsonrpc": "2.0",
                                     "id": req_id,
                                     "error": {
@@ -313,12 +396,36 @@ class ServerManager:
                                         "message": f"Tool '{tool_name}' is not enabled in active scenario '{active_sc}'"
                                     }
                                 })
+                                await response(scope, receive, send)
+                                return
+
+                        # Construct a replayed receive channel to avoid request body consumption issues
+                        body_sent = False
+                        async def replayed_receive():
+                            nonlocal body_sent
+                            if not body_sent:
+                                body_sent = True
+                                return {
+                                    "type": "http.request",
+                                    "body": body_bytes,
+                                    "more_body": False
+                                }
+                            return await receive()
+
+                        # Clear root_path and align path to avoid 404 in FastMCP router
+                        scope["path"] = "/mcp"
+                        scope["raw_path"] = b"/mcp"
+                        scope["root_path"] = ""
+                        await default_sub_app(scope, replayed_receive, send)
+                        return
 
                     except Exception as exc:
                         logger.error(f"Error parsing custom JSON-RPC endpoint: {exc}")
 
-                # Forward standard execution to FastMCP sub-app
-                return await default_sub_app(request.scope, request.receive, request.send)
+                scope["path"] = "/mcp"
+                scope["raw_path"] = b"/mcp"
+                scope["root_path"] = ""
+                await default_sub_app(scope, receive, send)
 
             finally:
                 current_scenario_id.reset(token)
@@ -326,9 +433,15 @@ class ServerManager:
         routes = [
             Route("/", homepage),
             Route("/health", health),
-            Route("/mcp", custom_mcp_endpoint, methods=["GET", "POST"]),
+            Route("/scenarios", list_scenarios, methods=["GET"]),
+            Route("/scenarios/{scenario_id}", get_scenario, methods=["GET"]),
+            Route("/scenarios/{scenario_id}/activate", activate_scenario, methods=["POST"]),
+            Route("/scenarios/{scenario_id}/state", get_scenario_state, methods=["GET"]),
+            Route("/scenarios/{scenario_id}/state", update_scenario_state, methods=["POST"]),
+            Route("/scenarios/{scenario_id}/reset", reset_scenario_state, methods=["POST"]),
         ]
         app = Starlette(routes=routes, lifespan=mock_lifespan)
+        app.mount("/mcp", custom_mcp_endpoint)
         return app
 
     def run_gateway(self, host: Optional[str] = None, port: Optional[int] = None) -> None:
