@@ -14,6 +14,7 @@ from mcp_gateway.security.auth import PerCallAuthorizer
 from mcp_gateway.observability import logger
 from mcp_gateway.core.proxy import upstream_proxy_registry
 from mcp_gateway.core.openapi_bridge import openapi_bridge_registry
+from mcp_gateway.core.graphql_bridge import graphql_bridge_registry
 from mcp_gateway.core.schemas import schema_registry
 from mcp_gateway.security.security import ToolDescriptionSanitizer, hash_pinning_guard, extract_forwardable_headers
 from mcp_gateway.core.middleware.header_validation import validate_mcp_headers
@@ -254,6 +255,16 @@ class ToolGatewayRouter:
                     headers_override=client_headers,
                 )
                 return JSONResponse(openapi_res)
+
+            if target_adapter and target_adapter.adapter_type == AdapterType.GRAPHQL_BRIDGE:
+                # Proxy tool call to GraphQL API endpoint via GraphQL Bridge
+                graphql_res = await graphql_bridge_registry.call_graphql_tool(
+                    server_id=target_adapter.name,
+                    tool_name=tool_name,
+                    tool_args=tool_args,
+                    headers_override=client_headers,
+                )
+                return JSONResponse(graphql_res)
 
             return JSONResponse({
                 "jsonrpc": "2.0",

@@ -1,6 +1,6 @@
 # Enterprise MCP Gateway & OpenAPI REST Server Bridge
 
-Hệ thống **Enterprise Unified MCP Gateway** phát triển trên **Python 3.14**, hỗ trợ **Kiến trúc Plug-In / Plug-Out Adapter linh hoạt**, **Global Tool Gateway Router (`POST /mcp`)**, **Đăng ký Dynamic & Upstream Proxy MCP Servers qua Streamable HTTP**, và **OpenAPI REST Bridge Adapter (`OPENAPI_BRIDGE`)** compliant với **MCP Specification (2026-07-28)** và **JSON Schema Draft 2020-12**.
+Hệ thống **Enterprise Unified MCP Gateway** phát triển trên **Python 3.14**, hỗ trợ **Kiến trúc Plug-In / Plug-Out Adapter linh hoạt**, **Global Tool Gateway Router (`POST /mcp`)**, **Đăng ký Dynamic & Upstream Proxy MCP Servers qua Streamable HTTP**, **OpenAPI REST Bridge Adapter (`OPENAPI_BRIDGE`)**, và **GraphQL Server Bridge Adapter (`GRAPHQL_BRIDGE`)** compliant với **MCP Specification (2026-07-28)** và **JSON Schema Draft 2020-12**.
 
 ---
 
@@ -22,11 +22,13 @@ graph TD
     subgraph Adapters ["Registered Adapters"]
         ExtProxy["External Real MCP Server<br/>- Upstream Proxy<br/>- Streamable HTTP"]
         OpenAPIBridge["OpenAPI REST Bridge Server<br/>- REST -> MCP Translation<br/>- Draft 2020-12 JSON Schema"]
+        GraphQLBridge["GraphQL Server Bridge Server<br/>- GraphQL Queries/Mutations -> MCP<br/>- Schema SDL & Introspection"]
         MockServer["External Mock MCP Service<br/>- Registered via POST /servers/register<br/>- (See src/mock_mcp/README.md)"]
     end
 
     AdaptersMgr --> ExtProxy
     AdaptersMgr --> OpenAPIBridge
+    AdaptersMgr --> GraphQLBridge
     AdaptersMgr --> MockServer
 ```
 
@@ -69,12 +71,11 @@ Endpoint tập trung **`POST /mcp`** hoạt động trên một cổng duy nhấ
 
 ---
 
-## 🌉 OpenAPI REST Server Bridge Adapter (`OPENAPI_BRIDGE`)
+## 🌉 OpenAPI REST & GraphQL Server Bridge Adapters (`OPENAPI_BRIDGE` & `GRAPHQL_BRIDGE`)
 
-Hệ thống tự động chuyển đổi các REST API Servers dựa trên OpenAPI v3.x Specs (JSON hoặc YAML) thành các MCP Tools tuân thủ chuẩn JSON Schema Draft 2020-12:
-- Tự động phân tích cú pháp OpenAPI Spec từ URL hoặc local path.
-- Dereference đệ quy các tham chiếu `$ref` và xử lý các combinators (`anyOf`, `oneOf`, `allOf`, `not`).
-- Chuyển đổi endpoint REST (`GET`, `POST`, `PUT`, `DELETE`) thành công cụ MCP chuẩn.
+Hệ thống tự động chuyển đổi các REST API Servers (OpenAPI v3.x) và GraphQL Servers (SDL hoặc Introspection) thành các MCP Tools tuân thủ chuẩn JSON Schema Draft 2020-12:
+- **OpenAPI Bridge**: Phân tích cú pháp OpenAPI Spec từ URL/local path, dereference `$ref` và chuyển đổi REST endpoints (`GET`, `POST`, `PUT`, `DELETE`) thành MCP tools.
+- **GraphQL Bridge**: Phân tích cú pháp GraphQL Schema (SDL hoặc introspection query) và dịch các Queries và Mutations thành các MCP tools với kiểu dữ liệu chuẩn và tự động sinh selection sets.
 
 ---
 

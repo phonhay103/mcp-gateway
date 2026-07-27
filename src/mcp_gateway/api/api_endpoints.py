@@ -12,6 +12,7 @@ from mcp_gateway.observability import logger
 from mcp_gateway.observability.metrics import metrics_collector
 from mcp_gateway.core.proxy import UpstreamMCPServerConfig, upstream_proxy_registry
 from mcp_gateway.core.openapi_bridge import OpenAPIBridgeConfig, openapi_bridge_registry
+from mcp_gateway.core.graphql_bridge import GraphQLBridgeConfig, graphql_bridge_registry
 from mcp_gateway.core.router import ToolGatewayRouter
 from mcp_gateway.security.security import extract_forwardable_headers
 from mcp_gateway.core.schemas import schema_registry
@@ -62,6 +63,26 @@ def create_gateway_routes() -> List[Route]:
             data = await request.json()
             config = PlugInAdapterConfig.model_validate(data)
             client_headers = extract_forwardable_headers(request)
+
+            if config.adapter_type == AdapterStatus.RUNNING and (
+                data.get("adapter_type") == "graphql_bridge"
+                or config.adapter_type == "graphql_bridge"
+                or data.get("graphql_schema_url")
+                or data.get("graphql_schema")
+                or data.get("graphql_schema_path")
+            ):
+                gql_cfg = GraphQLBridgeConfig(
+                    server_id=config.name,
+                    name=config.description or config.name,
+                    base_url=config.base_url or "http://localhost:8080/graphql",
+                    graphql_schema_url=data.get("graphql_schema_url"),
+                    graphql_schema_path=data.get("graphql_schema_path"),
+                    graphql_schema=data.get("graphql_schema"),
+                    headers=config.headers,
+                )
+                tools = await graphql_bridge_registry.register_graphql_server(gql_cfg, headers_override=client_headers)
+                adapter = adapter_registry.get_adapter(config.name)
+                return JSONResponse({"status": "plugged_in", "adapter": adapter.model_dump() if adapter else config.model_dump(), "tools_count": len(tools)}, status_code=201)
 
             if config.adapter_type == AdapterStatus.RUNNING and (
                 data.get("adapter_type") == "openapi_bridge"
@@ -154,6 +175,17 @@ def create_gateway_routes() -> List[Route]:
             server_type = data.get("server_type", "mcp").lower()
             client_headers = extract_forwardable_headers(request)
 
+            if server_type == "graphql" or "graphql_schema_url" in data or "graphql_schema" in data or "graphql_schema_path" in data:
+                gql_config = GraphQLBridgeConfig.model_validate(data)
+                tools = await graphql_bridge_registry.register_graphql_server(gql_config, headers_override=client_headers)
+                return JSONResponse({
+                    "status": "registered",
+                    "server_id": gql_config.server_id,
+                    "server_type": "graphql",
+                    "base_url": gql_config.base_url,
+                    "discovered_tools_count": len(tools),
+                }, status_code=201)
+
             if server_type == "openapi" or "openapi_spec_url" in data or "openapi_spec" in data:
                 bridge_config = OpenAPIBridgeConfig.model_validate(data)
                 tools = await openapi_bridge_registry.register_openapi_server(bridge_config, headers_override=client_headers)
@@ -188,17 +220,23 @@ def create_gateway_routes() -> List[Route]:
     async def list_servers_endpoint(request):
         external_mcp_servers = upstream_proxy_registry.list_servers()
         openapi_servers = openapi_bridge_registry.list_servers()
+        graphql_servers = graphql_bridge_registry.list_servers()
         return JSONResponse({
             "status": "success",
             "external_upstream_servers": external_mcp_servers,
             "openapi_bridge_servers": openapi_servers,
+            "graphql_bridge_servers": graphql_servers,
         })
 
     async def unregister_server_endpoint(request):
         server_id = request.path_params.get("server_id")
         removed = upstream_proxy_registry.unregister_server(server_id)
         if not removed:
-            return JSONResponse({"error": "Not Found", "message": f"External MCP server '{server_id}' not found"}, status_code=404)
+            removed = openapi_bridge_registry.unregister_server(server_id)
+        if not removed:
+            removed = graphql_bridge_registry.unregister_server(server_id)
+        if not removed:
+            return JSONResponse({"error": "Not Found", "message": f"Server '{server_id}' not found"}, status_code=404)
         return JSONResponse({"status": "unregistered", "server_id": server_id})
 
     async def global_mcp_router_endpoint(request):

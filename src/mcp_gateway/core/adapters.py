@@ -18,6 +18,7 @@ class AdapterType(str, Enum):
 
     REAL_UPSTREAM = "real_upstream"
     OPENAPI_BRIDGE = "openapi_bridge"
+    GRAPHQL_BRIDGE = "graphql_bridge"
 
 
 class AdapterStatus(str, Enum):
@@ -38,7 +39,10 @@ class PlugInAdapterConfig(BaseModel):
     upstream_url: Optional[str] = Field(default=None, description="HTTP URL for real upstream MCP server")
     openapi_spec_url: Optional[str] = Field(default=None, description="HTTP URL for OpenAPI spec (json/yaml)")
     openapi_spec_path: Optional[str] = Field(default=None, description="Local file path for OpenAPI spec (json/yaml)")
-    base_url: Optional[str] = Field(default=None, description="Base REST API URL for OpenAPI server")
+    graphql_schema_url: Optional[str] = Field(default=None, description="HTTP URL for GraphQL schema/introspection")
+    graphql_schema_path: Optional[str] = Field(default=None, description="Local file path for GraphQL schema/introspection")
+    graphql_schema: Optional[Any] = Field(default=None, description="Inline GraphQL schema SDL or dict")
+    base_url: Optional[str] = Field(default=None, description="Base REST API URL for OpenAPI server or GraphQL endpoint")
     headers: Dict[str, str] = Field(default_factory=dict, description="Custom HTTP headers for upstream calls")
     allowed_forward_headers: List[str] = Field(default_factory=list, description="Whitelist of client-supplied headers allowed to be forwarded downstream")
     tools: List[str] = Field(default_factory=list, description="Explicit or discovered tool names provided by this adapter")
