@@ -1,7 +1,7 @@
 # Scenario: Utility & Data Processing
 id: "utility-scenario"
 name: "Utility Scenario"
-description: "Scenario chuyên biệt xử lý tính toán và quản lý dữ liệu"
+description: "Specialized scenario for computation and data management."
 
 tools:
   - calculate
@@ -11,7 +11,7 @@ tools:
 fixtures:
   - "default_users.yaml"
 
-# Chi tiết định nghĩa ở mức Tool-Level cho kết quả (mock_result) hoặc lỗi (error with isError: true)
+# Tool-level behaviors for mock results or error simulations
 tool_behaviors:
   http_ping:
     error:

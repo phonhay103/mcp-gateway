@@ -1,7 +1,7 @@
 # Scenario: Full Enterprise Sandbox
 id: "full-scenario"
 name: "Full Enterprise Sandbox Scenario"
-description: "Scenario tích hợp đầy đủ tất cả các công cụ của hệ thống"
+description: "Comprehensive scenario integrating all system tools."
 
 tools:
   - get_system_info
@@ -14,5 +14,5 @@ fixtures:
   - "default_users.yaml"
   - "sysops_metrics.yaml"
 
-# Chi tiết định nghĩa ở mức Tool-Level cho kết quả (mock_result) hoặc lỗi (error with isError: true)
+# Tool-level behaviors for mock results or error simulations
 tool_behaviors: {}

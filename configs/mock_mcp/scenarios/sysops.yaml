@@ -1,7 +1,7 @@
 # Scenario: SysOps & Infrastructure Monitoring
 id: "sysops-scenario"
 name: "SysOps Monitoring Scenario"
-description: "Scenario chuyên biệt cho việc kiểm tra hạ tầng và ping mạng"
+description: "Specialized scenario for infrastructure inspection and network pinging."
 
 tools:
   - get_system_info
@@ -10,7 +10,7 @@ tools:
 fixtures:
   - "sysops_metrics.yaml"
 
-# Chi tiết định nghĩa ở mức Tool-Level cho kết quả (mock_result) hoặc lỗi (error with isError: true)
+# Tool-level behaviors for mock results or error simulations (isError: true)
 tool_behaviors:
   calculate:
     error:

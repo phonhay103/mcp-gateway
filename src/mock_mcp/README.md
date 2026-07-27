@@ -1,12 +1,12 @@
 # Standalone Unified Mock MCP Service (`mock_mcp`)
 
-Dịch vụ **Mock MCP Server thống nhất** (Standalone Unified Microservice) phục vụ giả lập kịch bản (Scenarios) kiểm thử doanh nghiệp, nạp dữ liệu mẫu (Fixtures), kiểm thử mô phỏng lỗi (Error Simulations), và cung cấp API quản trị trạng thái (REST Management API) toàn diện bên ngoài giao thức MCP.
+The **Standalone Unified Mock MCP Service** provides scenario simulation for enterprise testing, fixture loading, tool-level chaos and error simulation, and a comprehensive REST Management API outside the core MCP protocol.
 
 ---
 
-## 🏛️ Kiến Trúc Microservice Thống Nhất
+## 🏛️ Unified Microservice Architecture
 
-`mock_mcp` hoạt động độc lập hoàn toàn với `mcp_gateway`. Dịch vụ vận hành trên một cổng duy nhất (mặc định `:2027`) và cung cấp duy nhất một đường dẫn MCP JSON-RPC tại `/mcp`.
+`mock_mcp` operates completely independently of `mcp_gateway`. The service runs on a dedicated port (default `:2027`) and exposes a single unified MCP JSON-RPC endpoint at `/mcp`.
 
 ```
                   +-----------------------------------+
@@ -17,69 +17,69 @@ Dịch vụ **Mock MCP Server thống nhất** (Standalone Unified Microservice)
           |                                                   |
           v                                                   v
   [MCP Endpoint: /mcp]                              [REST Control Plane]
-  - Định tuyến duy nhất.                             - GET /scenarios (Danh sách kịch bản)
-  - Phân tách qua header X-MCP-Scenario             - GET /scenarios/{id} (Chi tiết)
-    hoặc Scenario kích hoạt mặc định.               - POST /scenarios/{id}/activate (Kích hoạt)
-  - Lọc động tools list theo đúng kịch bản.         - GET/POST /scenarios/{id}/state (In-memory DB)
-  - Chặn cuộc gọi tools không được phép.            - POST /scenarios/{id}/reset (Khôi phục YAML)
+  - Single endpoint routing.                         - GET /scenarios (List scenarios)
+  - Isolated via X-MCP-Scenario header               - GET /scenarios/{id} (Details)
+    or default active scenario.                      - POST /scenarios/{id}/activate (Activate)
+  - Dynamic tool filtering per scenario.             - GET/POST /scenarios/{id}/state (In-memory DB)
+  - Rejects unauthorized tool calls.                 - POST /scenarios/{id}/reset (Restore YAML)
 ```
 
 ---
 
-## 🛠️ Các Tính Năng Chi Tiết
+## 🛠️ Detailed Features
 
-### 1. Phân Tách Scenario ID Linh Hoạt (Không Dùng Path Prefix)
-Không còn chia tách đường dẫn thành `/full/mcp`, `/sysops/mcp`, Mock MCP tập trung toàn bộ dữ liệu vào **một đầu kết nối `/mcp`**.
-* **Định danh chủ động:** Đọc header `X-MCP-Scenario` truyền vào để tự động phân giải luồng kịch bản tương ứng (`full-scenario`, `sysops-scenario`, `utility-scenario`).
-* **Kịch bản mặc định:** Nếu không truyền Header, Mock MCP sẽ lấy kịch bản mặc định được cấu hình (hoặc kịch bản được kích hoạt thông qua REST API).
+### 1. Flexible Scenario ID Resolution (No Path Prefixes)
+Rather than splitting routes into separate paths like `/full/mcp` or `/sysops/mcp`, Mock MCP centralizes all traffic into **a single `/mcp` connection point**.
+* **Active Identification:** Reads the incoming `X-MCP-Scenario` header to dynamically resolve the corresponding scenario workflow (`full-scenario`, `sysops-scenario`, `utility-scenario`, `chaos-scenario`).
+* **Default Scenario:** If no header is provided, Mock MCP falls back to the configured default scenario (or the one activated via the REST API).
 
-### 2. Định Nghĩa Tĩnh & Giới Hạn Tools Nghiêm Ngặt Theo Scenario
-Mỗi Scenario định nghĩa một danh sách `tools:` tĩnh, giới hạn phạm vi truy xuất:
-* **`tools/list`**: Trả về danh sách JSON Schema đã lọc động, chỉ chứa những tools có tên trong danh sách của Scenario hiện hành.
-* **`tools/call`**: Đảm bảo an toàn bảo mật. Nếu client cố tình gọi một công cụ nằm ngoài quyền truy cập của Scenario, server sẽ trả về lỗi JSON-RPC chuẩn `-32601` báo lỗi công cụ không được kích hoạt trong scenario hiện hành.
+### 2. Static Definitions & Strict Tool Limiting per Scenario
+Each scenario defines a static `tools:` list restricting execution scope:
+* **`tools/list`**: Returns a dynamically filtered JSON Schema list containing only tools enabled for the active scenario.
+* **`tools/call`**: Enforces strict security bounds. If a client attempts to invoke a tool outside the scenario's permission scope, the server rejects it with standard JSON-RPC error code `-32601`.
 
-### 3. REST Control Plane API Độc Lập Ngoài Giao Thức MCP
-Mock MCP cung cấp các REST API hữu dụng cho việc quản lý trạng thái, tự động hóa kiểm thử liên tục (CI/CD) và tích hợp hệ thống:
+### 3. Independent REST Control Plane API
+Mock MCP provides auxiliary REST APIs for state management, continuous integration (CI/CD) automation, and system integration:
 
-| Phương thức | Đường dẫn | Mô tả |
+| Method | Path | Description |
 | :--- | :--- | :--- |
-| **GET** | `/scenarios` | Liệt kê toàn bộ kịch bản, các tools được phép, fixtures liên kết, và trạng thái kích hoạt mặc định. |
-| **GET** | `/scenarios/{id}` | Lấy chi tiết thông số của kịch bản cụ thể. |
-| **POST** | `/scenarios/{id}/activate` | Đặt kịch bản này làm kịch bản mặc định toàn hệ thống (khi cuộc gọi MCP không gửi header `X-MCP-Scenario`). |
-| **GET** | `/scenarios/{id}/state` | Xem dữ liệu trong bộ nhớ (in-memory state/fixtures) hiện tại của kịch bản (ví dụ: danh sách users giả lập, metrics). |
-| **POST** | `/scenarios/{id}/state` | Cập nhật, chèn thêm dữ liệu giả lập động vào bộ nhớ phục vụ kiểm thử biên hoặc điều kiện kiểm thử động. |
-| **POST** | `/scenarios/{id}/reset` | Reload nguyên bản dữ liệu mẫu từ các tệp YAML Fixtures ban đầu trong thư mục cấu hình. |
+| **GET** | `/scenarios` | List all scenarios, permitted tools, linked fixtures, and default activation status. |
+| **GET** | `/scenarios/{id}` | Retrieve detailed configuration parameters for a specific scenario. |
+| **POST** | `/scenarios/{id}/activate` | Set the scenario as the system-wide default (when incoming MCP requests omit `X-MCP-Scenario`). |
+| **GET** | `/scenarios/{id}/state` | Inspect the current in-memory state/fixtures of the scenario (e.g., mock users, metrics). |
+| **POST** | `/scenarios/{id}/state` | Update or patch dynamic mock state for boundary and dynamic test conditions. |
+| **POST** | `/scenarios/{id}/reset` | Reload initial mock data from original YAML fixtures in the configuration directory. |
 
-### 4. Nạp Dữ Liệu Fixtures & Mô Phỏng Lỗi Chuẩn MCP
-* **Dữ liệu Fixtures:** Tự động nạp các tệp YAML từ thư mục ngoài hệ thống cấu hình (`configs/mock_mcp/fixtures/default_users.yaml`, `sysops_metrics.yaml`) vào in-memory state độc lập của từng Scenario.
-* **Mô phỏng lỗi (`error_simulations`):** Hỗ trợ khai báo mô phỏng lỗi công cụ cụ thể trực tiếp từ tệp YAML, tự động ném ra lỗi MCP chuẩn có `isError: true` và mã lỗi kèm mô tả chi tiết.
+### 4. Fixture Loading & MCP-Compliant Fault Injection
+* **Fixture Data:** Automatically loads YAML files from the external configuration directory (`configs/mock_mcp/fixtures/default_users.yaml`, `sysops_metrics.yaml`) into independent in-memory states per scenario.
+* **Tool-Level Chaos & Error Simulation:** Supports declaring latency delays (`latency_ms`), error rates (`error_rate`), simulated HTTP status codes (`http_status`), and explicit error definitions (`error`) per tool inside scenario configurations.
 
 ---
 
-## ⚡ Lệnh Khởi Chạy & Cấu Hình
+## ⚡ Startup & Configuration
 
-### 1. Cấu hình nằm ngoài mã nguồn (`configs/`)
-Mọi tệp tin cấu hình của Mock MCP nằm biệt lập tại thư mục gốc `/configs/mock_mcp/` thay vì trộn lẫn trong `src/`:
-* `configs/mock_mcp/mock_config.yaml`: Cấu hình chung cổng chạy, thư mục fixtures, thư mục kịch bản.
-* `configs/mock_mcp/scenarios/*.yaml`: Định nghĩa chi tiết các kịch bản kiểm thử (`full`, `sysops`, `utility`).
-* `configs/mock_mcp/fixtures/*.yaml`: Định nghĩa dữ liệu ban đầu.
+### 1. Externalized Configurations (`configs/`)
+All Mock MCP configurations reside in the root-level `/configs/mock_mcp/` directory rather than inside `src/`:
+* `configs/mock_mcp/mock_config.yaml`: Core server configuration (port, fixtures directory, scenarios directory).
+* `configs/mock_mcp/scenarios/*.yaml`: Detailed testing scenarios (`full`, `sysops`, `utility`, `chaos`).
+* `configs/mock_mcp/fixtures/*.yaml`: Initial mock state datasets.
 
-### 2. Khởi chạy trực tiếp qua `uv`
+### 2. Run Directly via `uv`
 ```bash
 uv run mock-mcp --config configs/mock_mcp/mock_config.yaml
 ```
 
-### 3. Khởi chạy qua Makefile
+### 3. Run via Makefile
 ```bash
 make run-mock
 ```
 
-### 4. Biến Môi Trường (Environment Variables)
+### 4. Environment Variables
 
-| Biến môi trường | Mặc định | Mô tả |
+| Environment Variable | Default | Description |
 | :--- | :--- | :--- |
-| `MCP_CONFIG_PATH` | `configs/mock_mcp/mock_config.yaml` | Đường dẫn tới tệp cấu hình YAML ngoài mã nguồn |
-| `LOG_LEVEL` | `INFO` | Mức độ ghi loguru (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
-| `GATEWAY_REGISTER_URL` | *(None)* | URL của `mcp_gateway` (vd: `http://mcp-gateway:2026`) để bật tự động đăng ký |
-| `MOCK_SERVICE_URL` | `http://mock-mcp:2027` | URL của dịch vụ `mock_mcp` khai báo với Gateway |
-| `GATEWAY_API_KEY` | `admin-secret-key-123` | API Key xác thực khi tự động đăng ký với Gateway |
+| `MCP_CONFIG_PATH` | `configs/mock_mcp/mock_config.yaml` | Path to the external YAML configuration file |
+| `LOG_LEVEL` | `INFO` | Loguru logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `GATEWAY_REGISTER_URL` | *(None)* | URL of `mcp_gateway` (e.g., `http://mcp-gateway:2026`) to enable auto-registration |
+| `MOCK_SERVICE_URL` | `http://mock-mcp:2027` | URL of the `mock_mcp` service advertised to the gateway |
+| `GATEWAY_API_KEY` | `admin-secret-key-123` | API key for authenticating auto-registration with the gateway |
