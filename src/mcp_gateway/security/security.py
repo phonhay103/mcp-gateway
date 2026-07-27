@@ -131,3 +131,89 @@ class EnterpriseSecurityMiddleware(BaseHTTPMiddleware):
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
         return response
+
+
+def extract_forwardable_headers(request: Request) -> Dict[str, str]:
+    """
+    Extract all client request headers from Starlette request.
+    Preserves and respects 100% of user-provided HTTP headers end-to-end,
+    EXCEPT for 'Authorization' headers starting with 'Bearer' or 'bearer' (which are reserved for MCP Gateway auth).
+    This guarantees downstream servers cannot view, steal, or interfere with the gateway client's credentials,
+    ensuring strict security isolation and zero-trust design.
+    """
+    forwarded: Dict[str, str] = {}
+    for key, value in request.headers.items():
+        key_lower = key.lower()
+        if key_lower in ("host", "content-length"):
+            continue
+        # Strip Gateway's client Bearer Token from downstream forwarding for security isolation
+        if key_lower == "authorization" and isinstance(value, str) and value.lower().startswith("bearer "):
+            continue
+        forwarded[key] = value
+
+    # Ensure X-Request-ID correlation token is preserved if present on request state
+    request_id = getattr(request.state, "request_id", None)
+    if request_id and "x-request-id" not in (k.lower() for k in forwarded):
+        forwarded["X-Request-ID"] = request_id
+
+    return forwarded
+
+
+def filter_forwardable_headers(client_headers: Dict[str, str], allowed_list: Optional[List[str]] = None) -> Dict[str, str]:
+    """
+    Filters and handles client-supplied headers according to protocol standards and security whitelists.
+    
+    1. Protocol/Infrastructure Headers:
+       - 'X-Request-ID' (Enterprise audit trail / correlation token)
+       - 'Traceparent', 'Tracestate' (W3C Distributed Tracing protocol standard)
+       These are always kept and preserved if provided by the client.
+       
+    2. Forbidden/Hop-by-hop Headers:
+       - 'host', 'connection', 'content-length', 'content-type', 'keep-alive',
+         'proxy-authenticate', 'proxy-authorization', 'te', 'trailer',
+         'transfer-encoding', 'upgrade'
+       These are always stripped as they are handled dynamically by HTTP transport layer.
+       
+    3. Gateway Auth Token:
+       - 'Authorization: Bearer <token>' is stripped to isolate Gateway and Downstream credentials.
+       
+    4. Custom Client Headers:
+       - Whitelisted using the case-insensitive `allowed_list`. If a client header is in the whitelist,
+         it is forwarded. Otherwise, it is stripped to prevent arbitrary header pollution on the backend.
+    """
+    filtered: Dict[str, str] = {}
+    
+    # Normalize whitelisted allowed list to lowercase for robust case-insensitive matching
+    whitelist = {x.lower() for x in (allowed_list or [])}
+    
+    # Hop-by-hop HTTP/1.1 transport headers that must not be forwarded
+    hop_by_hop = {
+        "host", "connection", "content-length", "content-type", "keep-alive",
+        "proxy-authenticate", "proxy-authorization", "te", "trailer",
+        "transfer-encoding", "upgrade"
+    }
+    
+    # Protocol standard headers that should always pass through if present
+    protocol_standards = {"x-request-id", "traceparent", "tracestate"}
+    
+    for key, value in client_headers.items():
+        key_lower = key.lower()
+        
+        # A. Exclude transport level hop-by-hop headers
+        if key_lower in hop_by_hop:
+            continue
+            
+        # B. Strip client-gateway Bearer tokens (security boundary)
+        if key_lower == "authorization" and isinstance(value, str) and value.lower().startswith("bearer "):
+            continue
+            
+        # C. Protocol-specific infrastructure headers always pass through
+        if key_lower in protocol_standards:
+            filtered[key] = value
+            continue
+            
+        # D. For custom client headers, strictly check the whitelisted allowed_list
+        if key_lower in whitelist:
+            filtered[key] = value
+
+    return filtered

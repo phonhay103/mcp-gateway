@@ -22,6 +22,31 @@ class ToolDefinition(Tool):
         if self.description:
             self.description = ToolDescriptionSanitizer.sanitize_description(self.description)
 
+    def validate_schema_structure(self) -> bool:
+        """Validate that inputSchema adheres to standard JSON Schema structure (type == 'object')."""
+        if not isinstance(self.inputSchema, dict):
+            return False
+        schema_type = self.inputSchema.get("type")
+        if schema_type:
+            if isinstance(schema_type, str) and schema_type != "object":
+                return False
+            elif isinstance(schema_type, list) and "object" not in schema_type:
+                return False
+        return True
+
+    def validate_arguments(self, arguments: Dict[str, Any]) -> List[str]:
+        """
+        Validate invocation arguments against required fields defined in inputSchema.
+        Returns a list of missing required parameter field names, if any.
+        """
+        missing_fields = []
+        if isinstance(self.inputSchema, dict):
+            required_fields = self.inputSchema.get("required", [])
+            for req in required_fields:
+                if req not in arguments:
+                    missing_fields.append(req)
+        return missing_fields
+
     def to_mcp_format(self) -> Dict[str, Any]:
         """Convert to standard MCP tools/list format using native model dump."""
         return self.model_dump(exclude_none=True)

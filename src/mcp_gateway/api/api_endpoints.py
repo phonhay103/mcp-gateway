@@ -12,8 +12,10 @@ from mcp_gateway.chaos import FaultRule, FaultType, chaos_engine
 from mcp_gateway.logger import logger
 from mcp_gateway.metrics import metrics_collector
 from mcp_gateway.proxy import UpstreamMCPServerConfig, upstream_proxy_registry
+from mcp_gateway.core.openapi_bridge import OpenAPIBridgeConfig, openapi_bridge_registry
 from mcp_gateway.recorder import ReplayEngine, ReproBundle, trace_recorder
 from mcp_gateway.router import ToolGatewayRouter
+from mcp_gateway.security import extract_forwardable_headers
 from mcp_gateway.schemas import schema_registry
 from mcp_gateway.session import generate_uuid7, session_manager
 
@@ -94,6 +96,28 @@ def create_gateway_routes(server_manager: Any) -> List[Route]:
         try:
             data = await request.json()
             config = PlugInAdapterConfig.model_validate(data)
+            client_headers = extract_forwardable_headers(request)
+
+            if config.adapter_type == AdapterStatus.RUNNING and (
+                data.get("adapter_type") == "openapi_bridge"
+                or config.adapter_type == "openapi_bridge"
+                or data.get("openapi_spec_url")
+                or data.get("openapi_spec")
+            ):
+                # Process as OpenAPI Bridge adapter
+                bridge_cfg = OpenAPIBridgeConfig(
+                    server_id=config.name,
+                    name=config.description or config.name,
+                    base_url=config.base_url or "http://localhost:8080",
+                    openapi_spec_url=data.get("openapi_spec_url"),
+                    openapi_spec_path=data.get("openapi_spec_path"),
+                    openapi_spec=data.get("openapi_spec"),
+                    headers=config.headers,
+                )
+                tools = await openapi_bridge_registry.register_openapi_server(bridge_cfg, headers_override=client_headers)
+                adapter = adapter_registry.get_adapter(config.name)
+                return JSONResponse({"status": "plugged_in", "adapter": adapter.model_dump() if adapter else config.model_dump(), "tools_count": len(tools)}, status_code=201)
+
             registered = adapter_registry.register_adapter(config)
             return JSONResponse({"status": "plugged_in", "adapter": registered.model_dump()}, status_code=201)
         except Exception as exc:
@@ -529,15 +553,29 @@ def create_gateway_routes(server_manager: Any) -> List[Route]:
     # --- Upstream External Servers APIs ---
 
     async def register_server_endpoint(request):
-        """POST /servers/register: Dynamically register a real external HTTP/Streamable-HTTP MCP server."""
+        """POST /servers/register: Dynamically register a real external HTTP/Streamable-HTTP MCP server or OpenAPI REST server."""
         try:
             data = await request.json()
+            server_type = data.get("server_type", "mcp").lower()
+            client_headers = extract_forwardable_headers(request)
+
+            if server_type == "openapi" or "openapi_spec_url" in data or "openapi_spec" in data:
+                bridge_config = OpenAPIBridgeConfig.model_validate(data)
+                tools = await openapi_bridge_registry.register_openapi_server(bridge_config, headers_override=client_headers)
+                return JSONResponse({
+                    "status": "registered",
+                    "server_id": bridge_config.server_id,
+                    "server_type": "openapi",
+                    "base_url": bridge_config.base_url,
+                    "discovered_tools_count": len(tools),
+                }, status_code=201)
+
             config = UpstreamMCPServerConfig.model_validate(data)
             upstream_proxy_registry.register_server(config)
 
             discovered_count = 0
             try:
-                tools = await upstream_proxy_registry.discover_upstream_tools(config.server_id)
+                tools = await upstream_proxy_registry.discover_upstream_tools(config.server_id, headers_override=client_headers)
                 discovered_count = len(tools)
             except Exception as exc:
                 logger.warning(f"Registered external server [{config.server_id}] but tools auto-discovery pending: {exc}")
@@ -545,6 +583,7 @@ def create_gateway_routes(server_manager: Any) -> List[Route]:
             return JSONResponse({
                 "status": "registered",
                 "server_id": config.server_id,
+                "server_type": "mcp",
                 "upstream_url": config.upstream_url,
                 "discovered_tools_count": discovered_count,
             }, status_code=201)
@@ -552,13 +591,15 @@ def create_gateway_routes(server_manager: Any) -> List[Route]:
             return JSONResponse({"error": "Bad Request", "message": f"Failed to register server: {exc}"}, status_code=400)
 
     async def list_servers_endpoint(request):
-        """GET /servers: List all registered local and external real MCP servers."""
-        external_servers = upstream_proxy_registry.list_servers()
+        """GET /servers: List all registered local, external real MCP, and OpenAPI REST servers."""
+        external_mcp_servers = upstream_proxy_registry.list_servers()
+        openapi_servers = openapi_bridge_registry.list_servers()
         local_servers = [s.model_dump() for s in server_manager.yaml_config.servers] if server_manager.yaml_config else []
         return JSONResponse({
             "status": "success",
             "local_servers": local_servers,
-            "external_upstream_servers": external_servers,
+            "external_upstream_servers": external_mcp_servers,
+            "openapi_bridge_servers": openapi_servers,
         })
 
     async def unregister_server_endpoint(request):

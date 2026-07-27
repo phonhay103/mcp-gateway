@@ -22,10 +22,12 @@ graph TD
     subgraph Adapters ["Registered Adapters"]
         LocalMock["Local Mock / Scenario Server<br/>- SysOps / Utility<br/>- Whitelisted Tools"]
         ExtProxy["External Real MCP Server<br/>- Upstream Proxy<br/>- Hash-Pinning & Sanitizer"]
+        OpenAPIBridge["OpenAPI REST Bridge Server<br/>- Swagger / OpenAPI v3.x<br/>- REST -> MCP Translation"]
     end
 
     AdaptersMgr --> LocalMock
     AdaptersMgr --> ExtProxy
+    AdaptersMgr --> OpenAPIBridge
 ```
 
 ---
@@ -79,13 +81,13 @@ Endpoint tập trung **`POST /mcp`** hoạt động như một Intelligent Route
 
 ---
 
-## 🌐 Đăng Ký MCP Server Thật & Upstream Proxy Routing (`proxy.py`)
+## 🌐 Đăng Ký MCP Server Thật & Upstream Proxy Routing (`proxy.py` & `openapi_bridge.py`)
 
-Hệ thống loại bỏ hoàn toàn giao thức STDIO để chuẩn hóa **100% trên giao thức Streamable HTTP / HTTP JSON-RPC**. Cho phép kết nối và điều tuyến tới các **Real External MCP Servers**:
+Hệ thống loại bỏ hoàn toàn giao thức STDIO để chuẩn hóa **100% trên giao thức Streamable HTTP / HTTP JSON-RPC** và **OpenAPI REST Specifications**. Cho phép kết nối và điều tuyến tới các **Real External MCP Servers** và các **OpenAPI REST Servers**:
 
-1. **Dynamic Registration API (`POST /servers/register`)**: Đăng ký các server MCP thật đang chạy ở môi trường ngoài.
-2. **Upstream Tool Auto-Discovery & Security Enforcer**: Tự động lấy danh sách công cụ từ server thật qua JSON-RPC `tools/list`, áp dụng ngay SHA-256 Hash-Pinning và Description Sanitizer.
-3. **Transparent Request Forwarding (`forward_tool_call`)**: Chuyển tiếp minh bạch các yêu cầu `tools/call` đến server MCP thật, kết hợp ghi vết Trace và Prometheus metrics.
+1. **Dynamic Registration API (`POST /servers/register`)**: Đăng ký các server MCP thật (`server_type="mcp"`) hoặc REST API Servers dựa trên OpenAPI spec (`server_type="openapi"`).
+2. **Upstream & OpenAPI Tool Auto-Discovery & Security Enforcer**: Tự động lấy danh sách công cụ từ server thật qua JSON-RPC `tools/list` hoặc tự động phân tích cú pháp tệp `openapi.json/yaml` để chuyển đổi các endpoint REST (`GET`, `POST`, `PUT`, `DELETE`) thành các MCP tools, áp dụng ngay SHA-256 Hash-Pinning và Description Sanitizer.
+3. **Transparent Request Forwarding (`forward_tool_call` & `call_openapi_tool`)**: Chuyển tiếp minh bạch các yêu cầu `tools/call` đến server MCP thật hoặc biến đổi các tham số (path, query, body) và gửi request HTTP REST đến dịch vụ OpenAPI tương ứng, kết hợp ghi vết Trace và Prometheus metrics.
 
 ---
 

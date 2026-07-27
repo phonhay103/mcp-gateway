@@ -7,7 +7,9 @@ from mcp_gateway.security.security import (
     EnterpriseSecurityMiddleware, 
     ToolDescriptionSanitizer, 
     SchemaHashPinningGuard, 
-    hash_pinning_guard
+    hash_pinning_guard,
+    extract_forwardable_headers,
+    filter_forwardable_headers,
 )
 from mcp_gateway.security.rate_limiter import RateLimitMiddleware
 
@@ -20,5 +22,7 @@ __all__ = [
     "ToolDescriptionSanitizer",
     "SchemaHashPinningGuard",
     "hash_pinning_guard",
+    "extract_forwardable_headers",
+    "filter_forwardable_headers",
     "RateLimitMiddleware",
 ]

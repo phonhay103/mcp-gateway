@@ -22,6 +22,7 @@ class AdapterType(str, Enum):
     MOCK_LOCAL = "mock_local"
     SCENARIO = "scenario"
     REAL_UPSTREAM = "real_upstream"
+    OPENAPI_BRIDGE = "openapi_bridge"
 
 
 class AdapterStatus(str, Enum):
@@ -40,7 +41,11 @@ class PlugInAdapterConfig(BaseModel):
     description: str = Field(default="", description="Adapter description")
     adapter_type: AdapterType = Field(default=AdapterType.MOCK_LOCAL, description="Adapter type")
     upstream_url: Optional[str] = Field(default=None, description="HTTP URL for real upstream MCP server")
+    openapi_spec_url: Optional[str] = Field(default=None, description="HTTP URL for OpenAPI spec (json/yaml)")
+    openapi_spec_path: Optional[str] = Field(default=None, description="Local file path for OpenAPI spec (json/yaml)")
+    base_url: Optional[str] = Field(default=None, description="Base REST API URL for OpenAPI server")
     headers: Dict[str, str] = Field(default_factory=dict, description="Custom HTTP headers for upstream calls")
+    allowed_forward_headers: List[str] = Field(default_factory=list, description="Whitelist of client-supplied headers allowed to be forwarded downstream")
     tools: List[str] = Field(default_factory=list, description="Explicit or discovered tool names provided by this adapter")
     resources: List[str] = Field(default_factory=list, description="Resource URIs provided by this adapter")
     prompts: List[str] = Field(default_factory=list, description="Prompt names provided by this adapter")

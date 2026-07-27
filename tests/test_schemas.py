@@ -125,3 +125,28 @@ def test_scenario_tools_schema_endpoint(gateway_client: TestClient):
     assert "manage_users" in full_tools
     assert "calculate" in full_tools
     assert "get_system_info" in full_tools
+
+
+def test_tool_definition_schema_validation_methods():
+    """Test validate_schema_structure and validate_arguments methods on ToolDefinition."""
+    valid_tool = ToolDefinition(
+        name="test_val",
+        description="test",
+        inputSchema={
+            "type": "object",
+            "properties": {"city": {"type": "string"}},
+            "required": ["city"],
+        },
+    )
+
+    assert valid_tool.validate_schema_structure() is True
+    assert valid_tool.validate_arguments({"city": "Tokyo"}) == []
+    assert valid_tool.validate_arguments({}) == ["city"]
+
+    invalid_tool = ToolDefinition(
+        name="test_invalid",
+        description="test",
+        inputSchema={"type": "string"},
+    )
+    assert invalid_tool.validate_schema_structure() is False
+

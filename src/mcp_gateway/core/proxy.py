@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from mcp_gateway.logger import logger
 from mcp_gateway.metrics import metrics_collector
 from mcp_gateway.schemas import ToolDefinition, schema_registry
-from mcp_gateway.security import ToolDescriptionSanitizer, hash_pinning_guard
+from mcp_gateway.security import ToolDescriptionSanitizer, hash_pinning_guard, filter_forwardable_headers
 
 
 class UpstreamMCPServerConfig(BaseModel):
@@ -24,6 +24,7 @@ class UpstreamMCPServerConfig(BaseModel):
     headers: Dict[str, str] = Field(default_factory=dict, description="Custom HTTP headers (e.g. Authorization, X-API-Key)")
     timeout_seconds: float = Field(default=30.0, ge=1.0, description="HTTP timeout in seconds")
     scenario_id: Optional[str] = Field(default=None, description="Optional Scenario ID to automatically mount this server under")
+    allowed_forward_headers: List[str] = Field(default_factory=list, description="Whitelist of client-supplied headers allowed to be forwarded downstream")
 
     model_config = {"extra": "ignore"}
 
@@ -56,7 +57,9 @@ class UpstreamProxyRegistry:
         """Get config for registered external server."""
         return self._servers.get(server_id)
 
-    async def discover_upstream_tools(self, server_id: str) -> List[ToolDefinition]:
+    async def discover_upstream_tools(
+        self, server_id: str, headers_override: Optional[Dict[str, str]] = None
+    ) -> List[ToolDefinition]:
         """
         Fetch tools list from real upstream MCP server via JSON-RPC 'tools/list'.
         Automatically applies Gateway Security:
@@ -67,11 +70,15 @@ class UpstreamProxyRegistry:
         if not srv:
             raise ValueError(f"Upstream MCP Server '{server_id}' not found")
 
+        # Filter client headers based on whitelist and protocol standards
+        filtered_override = filter_forwardable_headers(headers_override or {}, srv.allowed_forward_headers)
+
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
             **srv.headers,
         }
+        headers.update(filtered_override)
 
         jsonrpc_payload = {
             "jsonrpc": "2.0",
@@ -144,7 +151,12 @@ class UpstreamProxyRegistry:
             }
 
         # W3C Trace Context Propagation
-        traceparent = headers_override.get("traceparent") if headers_override else None
+        client_trace = None
+        if headers_override:
+            # Look up traceparent case-insensitively
+            client_trace = next((v for k, v in headers_override.items() if k.lower() == "traceparent"), None)
+
+        traceparent = client_trace
         if not traceparent:
             import uuid
             # Generate valid W3C traceparent (version 00, 32-hex trace_id, 16-hex parent_id, flags 01)
@@ -152,14 +164,16 @@ class UpstreamProxyRegistry:
             pid = uuid.uuid4().hex[:16]
             traceparent = f"00-{tid}-{pid}-01"
 
+        # Filter custom client headers
+        filtered_override = filter_forwardable_headers(headers_override or {}, srv.allowed_forward_headers)
+
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
             "traceparent": traceparent,
             **srv.headers,
         }
-        if headers_override:
-            headers.update(headers_override)
+        headers.update(filtered_override)
 
         jsonrpc_payload = {
             "jsonrpc": "2.0",

@@ -15,9 +15,10 @@ from mcp_gateway.security.auth import PerCallAuthorizer
 from mcp_gateway.logger import logger
 from mcp_gateway.observability.metrics import metrics_collector
 from mcp_gateway.core.proxy import upstream_proxy_registry
+from mcp_gateway.core.openapi_bridge import openapi_bridge_registry
 from mcp_gateway.observability.recorder import trace_recorder
 from mcp_gateway.core.schemas import schema_registry
-from mcp_gateway.security import ToolDescriptionSanitizer, hash_pinning_guard
+from mcp_gateway.security import ToolDescriptionSanitizer, hash_pinning_guard, extract_forwardable_headers
 from mcp_gateway.session import session_manager
 from mcp_gateway.core.middleware.header_validation import validate_mcp_headers
 from mcp_gateway.core.middleware.chaos_middleware import evaluate_chaos
@@ -32,6 +33,9 @@ class ToolGatewayRouter:
         """Process incoming Streamable HTTP JSON-RPC request at POST /mcp."""
         session_id = getattr(request.state, "session_id", "default_session")
         scenario_id = getattr(request.state, "scenario_id", "default_scenario")
+
+        # Extract client custom headers to preserve and forward downstream end-to-end
+        client_headers = extract_forwardable_headers(request)
 
         try:
             body = await request.json()
@@ -283,6 +287,20 @@ class ToolGatewayRouter:
                     else:
                         target_adapter = None
 
+            # Validate arguments against schema if registered in schema_registry
+            registered_schema_tool = schema_registry.get_tool(tool_name)
+            if registered_schema_tool:
+                missing_args = registered_schema_tool.validate_arguments(tool_args)
+                if missing_args:
+                    return JSONResponse({
+                        "jsonrpc": "2.0",
+                        "id": req_id,
+                        "error": {
+                            "code": -32602,
+                            "message": f"Invalid params: Missing required parameter(s) {missing_args} for tool '{tool_name}'",
+                        },
+                    }, status_code=400)
+
             execution_result = None
             is_error = False
 
@@ -292,6 +310,7 @@ class ToolGatewayRouter:
                     server_id=target_adapter.name,
                     tool_name=tool_name,
                     tool_args=tool_args,
+                    headers_override=client_headers,
                 )
                 duration_ms = (time.time() - start_time) * 1000
                 final_state = dict(session.state)
@@ -309,6 +328,35 @@ class ToolGatewayRouter:
                 )
                 metrics_collector.record_tool_call(tool_name, "success" if "result" in upstream_res else "error")
                 return JSONResponse(upstream_res)
+
+            if target_adapter and target_adapter.adapter_type == AdapterType.OPENAPI_BRIDGE:
+                # Proxy tool call to REST API endpoint via OpenAPI Bridge
+                openapi_res = await openapi_bridge_registry.call_openapi_tool(
+                    server_id=target_adapter.name,
+                    tool_name=tool_name,
+                    tool_args=tool_args,
+                    headers_override=client_headers,
+                )
+                duration_ms = (time.time() - start_time) * 1000
+                final_state = dict(session.state)
+
+                is_res_error = bool("error" in openapi_res or (
+                    isinstance(openapi_res.get("result"), dict) and openapi_res.get("result", {}).get("isError", False)
+                ))
+
+                trace_recorder.record_call(
+                    session_id=session.session_id,
+                    scenario_id=scenario_id,
+                    tool_name=tool_name,
+                    tool_args=tool_args,
+                    initial_state=initial_state,
+                    final_state=final_state,
+                    duration_ms=duration_ms,
+                    is_error=is_res_error,
+                    result_payload=openapi_res.get("result"),
+                )
+                metrics_collector.record_tool_call(tool_name, "error" if is_res_error else "success")
+                return JSONResponse(openapi_res)
 
             # Local / Scenario execution fallback via registry tools
             from mcp_gateway.core.registry import AVAILABLE_TOOLS
