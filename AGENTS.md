@@ -1,10 +1,12 @@
-# Kỷ Yếu Kiến Trúc Phân Hệ: Tối Ưu Hóa & Xác Thực Hệ Thống Bằng Phân Tác Subagents
+# Kỷ Yếu Kiến Trúc Phân Hệ (Architecture Ledger)
 
-Tài liệu này là bản báo cáo kỹ thuật chuyên sâu (Deep-Dive Engineering Report) được tạo ra từ việc phân phối **3 Subagents phân tích độc lập** chạy song song. Các Subagents đã trực tiếp phân tích mã nguồn cấp thấp (low-level code), thuật toán xử lý và các cơ chế bảo mật của hệ thống **Enterprise MCP Gateway** và **Mock MCP Server**.
+Tài liệu này là bản báo cáo kỹ thuật chuyên sâu (Deep-Dive Engineering Report) lưu trữ các thuật toán xử lý cấp thấp, cơ chế định tuyến đa giao thức, bảo mật và các thiết kế phức tạp bên trong hệ thống **Enterprise MCP Gateway** và **Mock MCP Server**.
+
+> **Mục Đích:** Giữ cho tệp `README.md` chính ngắn gọn, tài liệu này chỉ tập trung vào phân tích kỹ thuật sâu (do các Subagents tự động trích xuất và tổng hợp).
 
 ---
 
-## 1. Subagent A: Phân Tích Lõi Định Tuyến `mcp-gateway`
+## 1. Kiến Trúc Lõi Định Tuyến `mcp-gateway`
 
 ### 1.1. Bộ Biên Dịch OpenAPI (`openapi_bridge.py`)
 Kiến trúc sử dụng `OpenAPIParser` để phiên dịch động các giao thức REST (OAS 3.0/3.1) sang chuẩn Model Context Protocol (MCP 2026-07-28).
@@ -25,7 +27,7 @@ Tại `core/router.py`, `ToolGatewayRouter` kiểm soát lưu lượng JSON-RPC:
 
 ---
 
-## 2. Subagent B: Phân Tích Môi Trường Giả Lập `mock_mcp`
+## 2. Kiến Trúc Môi Trường Giả Lập `mock_mcp`
 
 ### 2.1. Cấu Trúc Bộ Lọc Tránh Nghẽn Luồng ASGI
 Khác với các server HTTP thông thường, `mock_mcp` là một **Single Physical Server** (chỉ có 1 ứng dụng FastMCP). Việc tách các kịch bản (scenarios) được thực hiện bằng bộ lọc ASGI.
@@ -52,7 +54,7 @@ Mỗi công cụ chạy qua `check_scenario_tool_behavior(tool_name)`. Hàm này
 
 ---
 
-## 3. Subagent C: Phân Tích Hệ Thống Bảo Mật & Kịch Bản Kiểm Thử
+## 3. Hệ Thống Bảo Mật & Kịch Bản Kiểm Thử
 
 ### 3.1. Xác Thực JWT & Rate Limiter Mức Vi Mô
 *   **Phòng chống Timing Attacks:** Quá trình xác thực chữ ký và API Keys sử dụng `hmac.compare_digest` để tránh bị lộ mật khẩu qua phân tích thời gian phản hồi (Side-channel attacks).

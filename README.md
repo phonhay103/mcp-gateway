@@ -125,6 +125,13 @@ Cấu hình `claude_desktop_config.json`:
 
 ---
 
+## 📖 Tài Liệu Kiến Trúc Nâng Cao (Deep-Dive Architecture)
+
+Chi tiết về các thuật toán cấp thấp, bao gồm cách Gateway phiên dịch OpenAPI/GraphQL sang chuẩn MCP, cách Mock Server xử lý cạn kiệt luồng ASGI bằng `replayed_receive`, cách phân tách ngữ cảnh bằng `ContextVar`, và cơ sở hạ tầng bảo mật JWT/Rate Limiting đã được chuyển dời và ghi nhận toàn diện trong kỷ yếu kiến trúc tại:
+👉 **[`AGENTS.md`](AGENTS.md)** (Được phân tích và tổng hợp tự động bởi hệ thống Subagents)
+
+---
+
 ## 📖 Tài Liệu Cho Dịch Vụ Mock MCP (`mock_mcp`)
 
 Xem tài liệu đầy đủ về **`mock_mcp`** (Scenario Engine, Chaos Fault Injection, Time-Travel Snapshots, Trace Recording, Fixtures, Meta-Tools) tại:
