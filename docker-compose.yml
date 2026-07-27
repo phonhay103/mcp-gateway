@@ -2,24 +2,17 @@ services:
   mcp-gateway:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.gateway
     container_name: mcp-gateway
     ports:
-      - "2026:2026"   # Shared Gateway Port (Định tuyến thông minh qua Headers / Namespaces)
+      - "2026:2026"   # Shared Gateway Port
     environment:
-      - MCP_CONFIG_PATH=config/mcp_servers.yaml
       - LOG_LEVEL=INFO
-    volumes:
-      - ./config:/app/config:ro
     restart: unless-stopped
-    
-    # Enterprise Security Hardening
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    
-    # CPU & Memory Limits
     deploy:
       resources:
         limits:
@@ -27,15 +20,11 @@ services:
           memory: 512M
         reservations:
           memory: 128M
-
-    # Log Rotation Policy
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-
-    # Lightweight Healthcheck using curl
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:2026/"]
       interval: 10s
@@ -46,30 +35,25 @@ services:
   mock-mcp:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.mock
     container_name: mock-mcp
-    command: ["mock-mcp"]
     ports:
       - "2027:2027"   # Standalone Mock MCP Port
     environment:
-      - MCP_CONFIG_PATH=config/mcp_servers.yaml
+      - MCP_CONFIG_PATH=src/mock_mcp/config/mcp_servers.yaml
       - LOG_LEVEL=INFO
       - GATEWAY_REGISTER_URL=http://mcp-gateway:2026
       - MOCK_SERVICE_URL=http://mock-mcp:2027
       - GATEWAY_API_KEY=admin-secret-key-123
     volumes:
-      - ./config:/app/config:ro
+      - ./src/mock_mcp/config:/app/src/mock_mcp/config:ro
     restart: unless-stopped
     depends_on:
       - mcp-gateway
-
-    # Enterprise Security Hardening
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
-
-    # CPU & Memory Limits
     deploy:
       resources:
         limits:
@@ -77,15 +61,11 @@ services:
           memory: 512M
         reservations:
           memory: 128M
-
-    # Log Rotation Policy
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-
-    # Lightweight Healthcheck using curl
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:2027/health"]
       interval: 10s

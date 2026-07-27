@@ -9,8 +9,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, model_validator
 
-from mcp_gateway.logger import logger
-from mcp_gateway.observability.metrics import metrics_collector
+from mcp_gateway.observability import logger, metrics_collector
 from mcp_gateway.core.schemas import ToolDefinition, schema_registry
 
 

@@ -8,7 +8,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from mcp_gateway.core.adapters import AdapterStatus, PlugInAdapterConfig, adapter_registry
-from mcp_gateway.logger import logger
+from mcp_gateway.observability import logger
 from mcp_gateway.observability.metrics import metrics_collector
 from mcp_gateway.core.proxy import UpstreamMCPServerConfig, upstream_proxy_registry
 from mcp_gateway.core.openapi_bridge import OpenAPIBridgeConfig, openapi_bridge_registry

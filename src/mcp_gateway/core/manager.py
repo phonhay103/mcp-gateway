@@ -14,7 +14,7 @@ from mcp_gateway.core.adapters import adapter_registry
 from mcp_gateway.api.api_endpoints import create_gateway_routes
 from mcp_gateway.security.auth import AuthConfig, AuthMiddleware
 from mcp_gateway.core.config import GatewayYamlConfig
-from mcp_gateway.logger import logger, setup_logging
+from mcp_gateway.observability import logger, setup_logging
 from mcp_gateway.security.rate_limiter import RateLimitMiddleware
 from mcp_gateway.security.security import EnterpriseSecurityMiddleware
 

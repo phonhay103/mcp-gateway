@@ -12,7 +12,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from mcp_gateway.logger import log_audit_event, logger
+from mcp_gateway.observability import log_audit_event, logger
 
 
 class SchemaHashPinningGuard:

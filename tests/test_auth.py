@@ -8,7 +8,7 @@ from starlette.responses import PlainTextResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from mcp_gateway.auth import AuthConfig, AuthMiddleware
+from mcp_gateway.security.auth import AuthConfig, AuthMiddleware
 
 
 def test_auth_config_parsing():

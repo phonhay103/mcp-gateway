@@ -160,8 +160,12 @@ class ServerManager:
             fixtures_dir = Path(self.yaml_config.gateway.fixtures_dir)
         self.fixture_loader = FixtureLoader(fixtures_dir=fixtures_dir)
 
-        schemas_dir = self.config_path.parent / Path(self.yaml_config.gateway.schemas_dir).relative_to("config") if "config" in self.yaml_config.gateway.schemas_dir else Path(self.yaml_config.gateway.schemas_dir)
+        schemas_dir = self.config_path.parent / Path(self.yaml_config.gateway.schemas_dir).name
+        if not schemas_dir.exists():
+            schemas_dir = Path(self.yaml_config.gateway.schemas_dir)
         catalog_file = self.config_path.parent / "schemas" / "tools.json"
+        if not catalog_file.exists():
+            catalog_file = Path("src/mock_mcp/config/schemas/tools.json")
         schema_registry.load_schemas(schemas_dir=schemas_dir, catalog_file=catalog_file)
 
         if not self.yaml_config.scenarios:

@@ -18,10 +18,10 @@ test: ## Run unit tests with pytest
 run: run-gateway ## Run Enterprise Shared Gateway on port 2026
 
 run-gateway: ## Run Enterprise Gateway (port 2026)
-	uv run mcp-gateway --config config/mcp_servers.yaml
+	uv run mcp-gateway
 
 run-mock: ## Run Standalone Mock MCP Service (port 2027)
-	uv run mock-mcp --config config/mcp_servers.yaml
+	uv run mock-mcp --config src/mock_mcp/config/mcp_servers.yaml
 
 build: ## Build Docker container image
 	docker compose build

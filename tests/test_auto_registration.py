@@ -6,7 +6,7 @@ import asyncio
 import pytest
 from starlette.testclient import TestClient
 
-from mcp_gateway.manager import ServerManager as GatewayManager
+from mcp_gateway.core.manager import ServerManager as GatewayManager
 from mock_mcp.core.manager import ServerManager as MockManager
 from mock_mcp.core.auto_register import register_scenarios_with_gateway
 
@@ -14,10 +14,10 @@ from mock_mcp.core.auto_register import register_scenarios_with_gateway
 @pytest.mark.anyio
 async def test_mock_auto_registration_with_gateway():
     """Test that register_scenarios_with_gateway registers mock scenarios into gateway via POST /servers/register."""
-    gateway_mgr = GatewayManager("config/mcp_servers.yaml")
+    gateway_mgr = GatewayManager("src/mock_mcp/config/mcp_servers.yaml")
     gateway_app = gateway_mgr.create_gateway_app()
 
-    mock_mgr = MockManager("config/mcp_servers.yaml")
+    mock_mgr = MockManager("src/mock_mcp/config/mcp_servers.yaml")
 
     # Use TestClient with transport mock or AsyncClient test setup
     import httpx

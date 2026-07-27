@@ -82,7 +82,7 @@ SAMPLE_OPENAPI_SPEC = {
 @pytest.fixture
 def gateway_client():
     """Fixture providing a TestClient for a configured ServerManager Gateway app."""
-    config_file = Path("config/mcp_servers.yaml")
+    config_file = Path("src/mock_mcp/config/mcp_servers.yaml")
     manager = ServerManager(config_file)
     app = manager.create_gateway_app()
     return TestClient(app)

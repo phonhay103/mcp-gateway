@@ -17,10 +17,9 @@ from typing import Any, Dict, List, Optional, Set
 import httpx
 from pydantic import BaseModel, Field
 
-from mcp_gateway.logger import logger
-from mcp_gateway.observability.metrics import metrics_collector
+from mcp_gateway.observability import logger, metrics_collector
 from mcp_gateway.core.schemas import ToolDefinition, schema_registry
-from mcp_gateway.security import ToolDescriptionSanitizer, hash_pinning_guard, filter_forwardable_headers
+from mcp_gateway.security.security import ToolDescriptionSanitizer, hash_pinning_guard, filter_forwardable_headers
 from mcp_gateway.core.adapters import AdapterRegistry, AdapterStatus, AdapterType, PlugInAdapterConfig, adapter_registry
 
 

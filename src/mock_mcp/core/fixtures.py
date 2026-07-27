@@ -13,7 +13,7 @@ from mock_mcp.logger import logger
 class FixtureLoader:
     """Helper class to load and merge YAML fixtures."""
 
-    def __init__(self, fixtures_dir: Union[str, Path] = "config/fixtures"):
+    def __init__(self, fixtures_dir: Union[str, Path] = "src/mock_mcp/config/fixtures"):
         self.fixtures_dir = Path(fixtures_dir)
 
     def load_fixture_file(self, filename: str) -> Dict[str, Any]:

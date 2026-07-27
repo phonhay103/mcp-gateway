@@ -84,12 +84,12 @@ class ToolSchemaRegistry:
 
         # Resolve paths relative to project root or config
         if schemas_dir is None:
-            schemas_dir = Path("config/schemas/tools")
+            schemas_dir = Path("src/mock_mcp/config/schemas/tools")
         else:
             schemas_dir = Path(schemas_dir)
 
         if catalog_file is None:
-            catalog_file = Path("config/schemas/tools.json")
+            catalog_file = Path("src/mock_mcp/config/schemas/tools.json")
         else:
             catalog_file = Path(catalog_file)
 

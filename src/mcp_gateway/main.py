@@ -8,8 +8,8 @@ import os
 from pathlib import Path
 import sys
 
-from mcp_gateway.logger import logger, setup_logging
-from mcp_gateway.manager import ServerManager
+from mcp_gateway.observability import logger, setup_logging
+from mcp_gateway.core.manager import ServerManager
 
 
 def main():

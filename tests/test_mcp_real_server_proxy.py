@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, patch
 import httpx
 from starlette.testclient import TestClient
 
-from mcp_gateway.manager import ServerManager
-from mcp_gateway.proxy import (
+from mcp_gateway.core.manager import ServerManager
+from mcp_gateway.core.proxy import (
     UpstreamMCPServerConfig,
     upstream_proxy_registry,
 )
@@ -101,7 +101,7 @@ async def test_upstream_proxy_tool_discovery_and_forwarding():
 
 def test_rest_api_server_registration_endpoints():
     """Test REST API endpoints for /servers, /servers/register, and /servers/{id}."""
-    manager = ServerManager("config/mcp_servers.yaml")
+    manager = ServerManager("src/mock_mcp/config/mcp_servers.yaml")
     app = manager.create_gateway_app()
     client = TestClient(app)
 

@@ -11,11 +11,11 @@ from starlette.responses import JSONResponse, Response
 
 from mcp_gateway.core.adapters import AdapterStatus, AdapterType, adapter_registry
 from mcp_gateway.security.auth import PerCallAuthorizer
-from mcp_gateway.logger import logger
+from mcp_gateway.observability import logger
 from mcp_gateway.core.proxy import upstream_proxy_registry
 from mcp_gateway.core.openapi_bridge import openapi_bridge_registry
 from mcp_gateway.core.schemas import schema_registry
-from mcp_gateway.security import ToolDescriptionSanitizer, hash_pinning_guard, extract_forwardable_headers
+from mcp_gateway.security.security import ToolDescriptionSanitizer, hash_pinning_guard, extract_forwardable_headers
 from mcp_gateway.core.middleware.header_validation import validate_mcp_headers
 
 class ToolGatewayRouter:

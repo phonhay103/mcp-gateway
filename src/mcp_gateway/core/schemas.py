@@ -10,8 +10,8 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 from mcp.types import Tool
 
-from mcp_gateway.logger import logger
-from mcp_gateway.security import ToolDescriptionSanitizer, hash_pinning_guard
+from mcp_gateway.observability import logger
+from mcp_gateway.security.security import ToolDescriptionSanitizer, hash_pinning_guard
 
 
 class ToolDefinition(Tool):

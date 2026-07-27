@@ -7,7 +7,7 @@ from starlette.responses import PlainTextResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from mcp_gateway.rate_limiter import RateLimitMiddleware
+from mcp_gateway.security.rate_limiter import RateLimitMiddleware
 from mcp_gateway.security import EnterpriseSecurityMiddleware
 
 
