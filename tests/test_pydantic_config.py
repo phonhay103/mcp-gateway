@@ -31,7 +31,7 @@ def test_pydantic_gateway_yaml_config():
         "version": "3.0",
         "gateway": {
             "host": "0.0.0.0",
-            "port": 8000,
+            "port": 2026,
             "rate_limiting": {"enabled": True, "requests_per_minute": 200},
             "auth": {
                 "enabled": True,
@@ -58,7 +58,7 @@ def test_pydantic_gateway_yaml_config():
     }
 
     config = GatewayYamlConfig.model_validate(yaml_data)
-    assert config.gateway.port == 8000
+    assert config.gateway.port == 2026
     assert config.gateway.rate_limiting.requests_per_minute == 200
     assert config.gateway.auth.enabled is True
     assert "admin-key" in config.gateway.auth.keys

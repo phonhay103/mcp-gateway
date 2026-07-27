@@ -31,7 +31,7 @@ def main():
         type=str,
         default=os.getenv("MCP_MODE", "gateway"),
         choices=["gateway", "single"],
-        help="Server run mode: 'gateway' (shared port 8000 via unified gateway & adapters) or 'single'",
+        help="Server run mode: 'gateway' (shared port 2026 via unified gateway & adapters) or 'single'",
     )
     parser.add_argument(
         "--transport",
@@ -49,8 +49,8 @@ def main():
     parser.add_argument(
         "--port",
         type=int,
-        default=int(os.getenv("FASTMCP_PORT", "8000")),
-        help="Port number to bind to in single mode (default: 8000)",
+        default=int(os.getenv("FASTMCP_PORT", "2026")),
+        help="Port number to bind to in single mode (default: 2026)",
     )
 
     args = parser.parse_args()

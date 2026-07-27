@@ -4,7 +4,7 @@ description: "Cấu hình MCP Servers gốc hoàn toàn độc lập (không ch�
 
 gateway:
   host: "0.0.0.0"
-  port: 8000
+  port: 2026
   enabled: true
   header_session_name: "X-Session-ID"
   header_scenario_name: "X-MCP-Scenario"

@@ -64,7 +64,7 @@ def test_server_manager_load_yaml(tmp_path: Path):
 
 def test_server_manager_gateway_app(tmp_path: Path):
     yaml_content = {
-        "gateway": {"host": "127.0.0.1", "port": 8000},
+        "gateway": {"host": "127.0.0.1", "port": 2026},
         "servers": [
             {
                 "name": "srv1",

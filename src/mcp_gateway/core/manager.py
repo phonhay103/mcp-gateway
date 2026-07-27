@@ -57,7 +57,7 @@ class ServerManager:
 
     @property
     def gateway_port(self) -> int:
-        return self.yaml_config.gateway.port if self.yaml_config else 8000
+        return self.yaml_config.gateway.port if self.yaml_config else 2026
 
     @property
     def gateway_enabled(self) -> bool:

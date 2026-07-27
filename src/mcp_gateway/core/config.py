@@ -21,7 +21,7 @@ class GatewayConfig(BaseModel):
     """Pydantic v2 Model for Gateway Global Configuration."""
 
     host: str = Field(default="0.0.0.0", description="Host address")
-    port: int = Field(default=8000, description="Shared gateway port")
+    port: int = Field(default=2026, description="Shared gateway port")
     enabled: bool = Field(default=True, description="Enable gateway mode")
     header_session_name: str = Field(default="X-Session-ID", description="Header for session tracking")
     header_scenario_name: str = Field(default="X-MCP-Scenario", description="Header for scenario selection")

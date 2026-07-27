@@ -5,18 +5,40 @@ services:
       dockerfile: Dockerfile
     container_name: mcp-gateway
     ports:
-      - "8000:8000"   # Shared Gateway Port (dùng chung port, phân biệt qua prefix)
-      - "8001:8001"   # Dedicated System Server Port
-      - "8002:8002"   # Dedicated Utility Server Port
-      - "8003:8003"   # Dedicated Full Server Port
+      - "2026:2026"   # Shared Gateway Port (Định tuyến thông minh qua Headers / Namespaces)
     environment:
       - MCP_MODE=hybrid
       - MCP_CONFIG_PATH=config/mcp_servers.yaml
+      - LOG_LEVEL=INFO
     volumes:
       - ./config:/app/config:ro
     restart: unless-stopped
+    
+    # Enterprise Security Hardening
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    
+    # CPU & Memory Limits (Prevents container resource exhaustion)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 128M
+
+    # Log Rotation Policy (Prevents disk exhaustion from container logs)
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Lightweight Healthcheck using curl
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      test: ["CMD", "curl", "-f", "http://localhost:2026/"]
       interval: 10s
       timeout: 5s
       retries: 3

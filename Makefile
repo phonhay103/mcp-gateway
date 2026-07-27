@@ -17,13 +17,13 @@ test: ## Run unit tests with pytest
 
 run: run-hybrid ## Run in Enterprise Hybrid mode (Shared Gateway + Dedicated Ports)
 
-run-gateway: ## Run multi-MCP in Shared Gateway mode (port 8000 only)
+run-gateway: ## Run multi-MCP in Shared Gateway mode (port 2026 only)
 	uv run mcp-gateway --mode gateway --config config/mcp_servers.yaml
 
-run-multi: ## Run multi-MCP on Dedicated Ports only (8001, 8002, 8003...)
+run-multi: ## Run multi-MCP on Dedicated Ports only
 	uv run mcp-gateway --mode multi-port --config config/mcp_servers.yaml
 
-run-hybrid: ## Run BOTH Shared Gateway (port 8000) AND Dedicated Ports (8001, 8002...)
+run-hybrid: ## Run BOTH Shared Gateway (port 2026) AND Dedicated Ports
 	uv run mcp-gateway --mode hybrid --config config/mcp_servers.yaml
 
 run-streamable: ## Run single MCP server in HTTP Streamable / SSE mode

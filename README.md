@@ -8,9 +8,9 @@ Hệ thống **Enterprise Dynamic Scenario MCP Gateway** phát triển trên **P
 
 ```mermaid
 graph TD
-    Client[Client / Claude Desktop / Cursor] -->|Streamable HTTP / JSON-RPC| Gateway["Enterprise Unified Gateway (:8000)"]
+    Client[Client / Claude Desktop / Cursor] -->|Streamable HTTP / JSON-RPC| Gateway["Enterprise Unified Gateway (:2026)"]
 
-    subgraph Gateway ["Enterprise Unified Gateway (Shared Port 8000)"]
+    subgraph Gateway ["Enterprise Unified Gateway (Shared Port 2026)"]
         Sec["Security & Auth Middleware<br/>- API Key / JWT<br/>- Rate Limiting<br/>- OWASP & DNS Rebinding Defense"] --> Router
         Router["Global Tool Gateway Router<br/>POST /mcp"]
         CP["Control Plane APIs<br/>- /adapters (Plug-In/Plug-Out)<br/>- /servers/register<br/>- /sessions & /repro"]
@@ -129,7 +129,7 @@ Hệ thống loại bỏ hoàn toàn giao thức STDIO để chuẩn hóa **100%
 | :--- | :--- |
 | `make install` | Cài đặt các thư viện phụ thuộc bằng `uv` với Python 3.14 |
 | `make test` | Chạy bộ kiểm thử tự động pytest trên Python 3.14 |
-| `make run` / `make run-gateway` | Chạy Enterprise Unified Gateway (Cổng chung 8000 duy nhất, không expose port riêng cho từng mock) |
+| `make run` / `make run-gateway` | Chạy Enterprise Unified Gateway (Cổng chung 2026 duy nhất, không expose port riêng cho từng mock) |
 | `make up` | Khởi chạy Docker Compose Gateway ở background |
 
 ---
@@ -143,7 +143,7 @@ Hệ thống loại bỏ hoàn toàn giao thức STDIO để chuẩn hóa **100%
 {
   "mcpServers": {
     "enterprise-mcp-gateway": {
-      "url": "http://localhost:8000/mcp"
+      "url": "http://localhost:2026/mcp"
     }
   }
 }
