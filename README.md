@@ -1,6 +1,6 @@
-# Enterprise MCP Gateway & OpenAPI REST Server Bridge
+# Enterprise MCP Gateway
 
-Hệ thống **Enterprise Unified MCP Gateway** phát triển trên **Python 3.14**, hỗ trợ **Kiến trúc Plug-In / Plug-Out Adapter linh hoạt**, **Global Tool Gateway Router (`POST /mcp`)**, **Đăng ký Dynamic & Upstream Proxy MCP Servers qua Streamable HTTP**, **OpenAPI REST Bridge Adapter (`OPENAPI_BRIDGE`)**, và **GraphQL Server Bridge Adapter (`GRAPHQL_BRIDGE`)** compliant với **MCP Specification (2026-07-28)** và **JSON Schema Draft 2020-12**.
+Hệ thống **Enterprise Unified MCP Gateway** phát triển trên **Python 3.14**, hỗ trợ **Đăng ký động (Dynamic Registration) các MCP Server, OpenAPI Server, và GraphQL Server**, **Global Tool Gateway Router (`POST /mcp`)**, compliant với **MCP Specification (2026-07-28)** và **JSON Schema Draft 2020-12**.
 
 ---
 
@@ -13,23 +13,23 @@ graph TD
     subgraph Gateway ["Enterprise Unified Gateway (Shared Port 2026)"]
         Sec["Security & Auth Middleware<br/>- API Key / JWT<br/>- Rate Limiting<br/>- OWASP & DNS Rebinding Defense"] --> Router
         Router["Global Tool Gateway Router<br/>POST /mcp"]
-        CP["Control Plane APIs<br/>- /adapters (Plug-In/Plug-Out)<br/>- /servers/register"]
+        CP["Control Plane APIs<br/>- /servers (Register / Unregister / Status)"]
         SecGuards["Enterprise Security Guards<br/>- SHA-256 Schema Hash-Pinning<br/>- Tool Description Sanitizer<br/>- Header Whitelisting & Token Stripping"]
     end
 
-    Router --> AdaptersMgr["Plug-In / Plug-Out Adapters Manager"]
+    Router --> CoreServerMgr["Core Server Manager & Registry"]
 
-    subgraph Adapters ["Registered Adapters"]
-        ExtProxy["External Real MCP Server<br/>- Upstream Proxy<br/>- Streamable HTTP"]
-        OpenAPIBridge["OpenAPI REST Bridge Server<br/>- REST -> MCP Translation<br/>- Draft 2020-12 JSON Schema"]
-        GraphQLBridge["GraphQL Server Bridge Server<br/>- GraphQL Queries/Mutations -> MCP<br/>- Schema SDL & Introspection"]
-        MockServer["External Mock MCP Service<br/>- Registered via POST /servers/register<br/>- (See src/mock_mcp/README.md)"]
+    subgraph CoreServers ["Registered Core Servers"]
+        MCPServer["MCP Server<br/>- Upstream Proxy<br/>- Streamable HTTP"]
+        OpenAPIServer["OpenAPI Server<br/>- REST -> MCP Translation<br/>- Draft 2020-12 JSON Schema"]
+        GraphQLServer["GraphQL Server<br/>- Queries / Mutations -> MCP<br/>- Schema SDL & Introspection"]
+        MockServer["Mock MCP Server<br/>- Standalone / Scenario Engine<br/>- (See src/mock_mcp/README.md)"]
     end
 
-    AdaptersMgr --> ExtProxy
-    AdaptersMgr --> OpenAPIBridge
-    AdaptersMgr --> GraphQLBridge
-    AdaptersMgr --> MockServer
+    CoreServerMgr --> MCPServer
+    CoreServerMgr --> OpenAPIServer
+    CoreServerMgr --> GraphQLServer
+    CoreServerMgr --> MockServer
 ```
 
 ---
@@ -42,18 +42,19 @@ graph TD
 
 ---
 
-## 🔌 Kiến Trúc Plug-In / Plug-Out Adapters (`mcp_gateway/core/adapters.py`)
+## 🌐 Dynamic Server Control Plane (`/servers`)
 
-Hệ thống quản lý mọi MCP Server (dù là External Real Upstream MCP Server, OpenAPI REST Server, hay Standalone Mock Server) dưới dạng các **PlugInAdapters** trên Control Plane (`/adapters`):
+Tất cả các server bên ngoài (**MCP Server**, **OpenAPI Server**, **GraphQL Server**) được quản lý tập trung và đồng nhất qua **DUY NHẤT 1 Endpoint Resource (`/servers`)**:
 
-1. **Plug-In Lifecycle APIs**:
-   - `POST /adapters`: Cắm vào (Plug-in) và kích hoạt một Adapter mới.
-   - `GET /adapters`: Liệt kê tất cả Adapters đang cắm trong hệ thống.
-   - `GET /adapters/{name}`: Lấy thông tin metadata của Adapter.
-   - `GET /adapters/{name}/status`: Kiểm tra trạng thái vận hành (`Running`, `Paused`, `Stopped`, `Failed`).
-   - `GET /adapters/{name}/logs`: Xem nhật ký runtime loguru của từng Adapter.
-   - `PUT /adapters/{name}`: Cập nhật cấu hình hoặc Tạm dừng / Kích hoạt lại.
-   - `DELETE /adapters/{name}`: Rút ra (Plug-out / Unregister) Adapter khỏi Gateway.
+1. **Server Lifecycle & Management APIs**:
+   - `POST /servers/register`: Đăng ký động một **MCP Server**, **OpenAPI Server**, hoặc **GraphQL Server**.
+   - `GET /servers`: Liệt kê tất cả các Server đã đăng ký.
+   - `GET /servers/{server_id}`: Lấy thông tin cấu hình chi tiết của một Server.
+   - `GET /servers/{server_id}/status`: Kiểm tra trạng thái vận hành (`Running`, `Paused`, `Stopped`, `Failed`).
+   - `GET /servers/{server_id}/logs`: Xem nhật ký runtime loguru của Server.
+   - `GET /servers/{server_id}/tools`: Danh sách các MCP Tools phát hiện được từ Server.
+   - `PUT /servers/{server_id}`: Cập nhật cấu hình hoặc Tạm dừng / Kích hoạt lại Server.
+   - `DELETE /servers/{server_id}`: Hủy đăng ký / gỡ Server khỏi Gateway.
 
 2. **Bảo vệ An Ninh Enterprise (Security Guards)**:
    - **SHA-256 Schema Hash-Pinning Guard**: Phòng chống tấn công Rug-Pull sửa đổi schema động.
@@ -65,17 +66,18 @@ Hệ thống quản lý mọi MCP Server (dù là External Real Upstream MCP Ser
 ## 🌐 Global Tool Gateway Router (`POST /mcp`)
 
 Endpoint tập trung **`POST /mcp`** hoạt động trên một cổng duy nhất (`2026`) theo chuẩn MCP 2026-07-28 Spec:
-- **Tự động hợp nhất (Aggregate)** danh mục công cụ từ tất cả các Adapters đang chạy (`Running`).
-- **Tự động điều tuyến (Dynamic Routing)** các cuộc gọi `tools/call` tới đúng Upstream MCP Server hoặc OpenAPI Bridge.
+- **Tự động hợp nhất (Aggregate)** danh mục công cụ từ tất cả các Server đang chạy (`Running`).
+- **Tự động điều tuyến (Dynamic Routing)** các cuộc gọi `tools/call` tới đúng **MCP Server**, **OpenAPI Server**, hoặc **GraphQL Server**.
 - **Thi hành An ninh**: Áp dụng Authentication (API Key / JWT), Sliding-Window Rate Limiting, và Header Whitelisting.
 
 ---
 
-## 🌉 OpenAPI REST & GraphQL Server Bridge Adapters (`OPENAPI_BRIDGE` & `GRAPHQL_BRIDGE`)
+## 🔌 Hỗ Trợ Loại Server (MCP, OpenAPI, GraphQL)
 
-Hệ thống tự động chuyển đổi các REST API Servers (OpenAPI v3.x) và GraphQL Servers (SDL hoặc Introspection) thành các MCP Tools tuân thủ chuẩn JSON Schema Draft 2020-12:
-- **OpenAPI Bridge**: Phân tích cú pháp OpenAPI Spec từ URL/local path, dereference `$ref` và chuyển đổi REST endpoints (`GET`, `POST`, `PUT`, `DELETE`) thành MCP tools.
-- **GraphQL Bridge**: Phân tích cú pháp GraphQL Schema (SDL hoặc introspection query) và dịch các Queries và Mutations thành các MCP tools với kiểu dữ liệu chuẩn và tự động sinh selection sets.
+Hệ thống tự động hỗ trợ 3 loại Server cốt lõi:
+- **MCP Server**: Kết nối tới các MCP Server nguyên bản qua Streamable HTTP/JSON-RPC.
+- **OpenAPI Server**: Phân tích cú pháp OpenAPI Spec (v3.x) từ URL/local path, dereference `$ref` và chuyển đổi REST endpoints (`GET`, `POST`, `PUT`, `DELETE`) thành MCP tools tuân thủ chuẩn JSON Schema Draft 2020-12.
+- **GraphQL Server**: Phân tích cú pháp GraphQL Schema (SDL hoặc introspection query) và chuyển đổi các Queries và Mutations thành các MCP tools với kiểu dữ liệu chuẩn và tự động sinh selection sets.
 
 ---
 
@@ -85,12 +87,12 @@ Hệ thống tự động chuyển đổi các REST API Servers (OpenAPI v3.x) v
 | :--- | :--- | :--- |
 | `/` | `GET` | Trang chủ & thông tin trạng thái Gateway |
 | `/mcp` | `POST` | **Global Tool Gateway Router** (Điều tuyến JSON-RPC tập trung) |
-| `/adapters` | `GET` | Liệt kê tất cả Plug-In Adapters |
-| `/adapters` | `POST` | Kích hoạt/Cắm vào một Adapter mới |
-| `/adapters/{name}` | `GET` / `PUT` / `DELETE` | Xem chi tiết, cập nhật, hoặc tháo gỡ Adapter |
-| `/servers/register` | `POST` | Đăng ký động Upstream MCP Server hoặc OpenAPI Bridge Server |
-| `/servers` | `GET` | Liệt kê danh sách các server đã đăng ký |
-| `/servers/{server_id}` | `DELETE` | Hủy đăng ký một server |
+| `/servers` | `GET` | Liệt kê toàn bộ các Server đã đăng ký |
+| `/servers/register` | `POST` | Đăng ký động MCP Server, OpenAPI Server, hoặc GraphQL Server |
+| `/servers/{server_id}` | `GET` / `PUT` / `DELETE` | Xem chi tiết, cập nhật (Running/Paused), hoặc hủy đăng ký Server |
+| `/servers/{server_id}/status` | `GET` | Xem trạng thái vận hành chi tiết |
+| `/servers/{server_id}/logs` | `GET` | Xem nhật ký loguru runtime của Server |
+| `/servers/{server_id}/tools` | `GET` | Danh sách MCP tools phát hiện từ Server |
 | `/metrics` | `GET` | Xuất chỉ số đo lường Prometheus |
 
 ---

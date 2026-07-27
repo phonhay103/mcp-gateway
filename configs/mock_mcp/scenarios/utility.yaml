@@ -2,12 +2,11 @@
 id: "utility-scenario"
 name: "Utility Scenario"
 description: "Scenario chuyên biệt xử lý tính toán và quản lý dữ liệu"
-prefix: "/utility"
-enable_gateway: true
 
-# Tham chiếu tới MCP Server gốc
-servers:
-  - "utility-server"
+tools:
+  - calculate
+  - manage_users
+  - generate_random_data
 
 fixtures:
   - "default_users.yaml"
@@ -28,5 +27,7 @@ tool_behaviors:
       status: "mock_generated"
       data_type: "fixed_test_sequence"
       items:
-        - "fixed-uuid-1111-2222"
-        - "fixed-uuid-3333-4444"
+        - id: 1
+          val: "seq_1"
+        - id: 2
+          val: "seq_2"

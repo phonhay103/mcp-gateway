@@ -40,13 +40,13 @@ services:
     ports:
       - "2027:2027"   # Standalone Mock MCP Port
     environment:
-      - MCP_CONFIG_PATH=src/mock_mcp/config/mcp_servers.yaml
+      - MCP_CONFIG_PATH=configs/mock_mcp/mock_config.yaml
       - LOG_LEVEL=INFO
       - GATEWAY_REGISTER_URL=http://mcp-gateway:2026
       - MOCK_SERVICE_URL=http://mock-mcp:2027
       - GATEWAY_API_KEY=admin-secret-key-123
     volumes:
-      - ./src/mock_mcp/config:/app/src/mock_mcp/config:ro
+      - ./configs:/app/configs:ro
     restart: unless-stopped
     depends_on:
       - mcp-gateway

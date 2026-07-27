@@ -101,7 +101,7 @@ async def test_upstream_proxy_tool_discovery_and_forwarding():
 
 def test_rest_api_server_registration_endpoints():
     """Test REST API endpoints for /servers, /servers/register, and /servers/{id}."""
-    manager = ServerManager("src/mock_mcp/config/mcp_servers.yaml")
+    manager = ServerManager("configs/mcp_gateway/gateway_config.yaml")
     app = manager.create_gateway_app()
     client = TestClient(app)
 

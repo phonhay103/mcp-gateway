@@ -10,7 +10,7 @@ import yaml
 from starlette.applications import Starlette
 import uvicorn
 
-from mcp_gateway.core.adapters import adapter_registry
+from mcp_gateway.core.servers import server_registry
 from mcp_gateway.api.api_endpoints import create_gateway_routes
 from mcp_gateway.security.auth import AuthConfig, AuthMiddleware
 from mcp_gateway.core.config import GatewayYamlConfig
@@ -67,10 +67,10 @@ class ServerManager:
             logger.error(f"Failed to validate Gateway YAML configuration: {e}")
             raise e
             
-        # Register adapters from config
-        if self.yaml_config.adapters:
-            for adapter_cfg in self.yaml_config.adapters:
-                adapter_registry.register_adapter(adapter_cfg)
+        # Register servers from config
+        if self.yaml_config.servers:
+            for srv_cfg in self.yaml_config.servers:
+                server_registry.register_server(srv_cfg)
 
     def _apply_middleware_pipeline(
         self, app: Starlette, allowed_origins: list[str]
@@ -99,7 +99,7 @@ class ServerManager:
 
         @contextlib.asynccontextmanager
         async def gateway_lifespan(app_instance: Starlette):
-            logger.info(f"Enterprise Gateway Unified Runtime started. Plugged-in Adapters: {len(adapter_registry.list_adapters())}")
+            logger.info(f"Enterprise Gateway Unified Runtime started. Registered Core Servers: {len(server_registry.list_servers())}")
             yield
             logger.info("Enterprise Gateway Unified Runtime shutting down.")
 

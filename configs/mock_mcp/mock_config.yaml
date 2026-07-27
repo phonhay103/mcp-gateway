@@ -1,0 +1,21 @@
+# Standalone Mock MCP Service Configuration
+version: "3.0"
+description: "Mock MCP Service Configuration containing local scenario and fixture loaders"
+
+gateway:
+  host: "0.0.0.0"
+  port: 2027
+  enabled: true
+  header_session_name: "X-Session-ID"
+  header_scenario_name: "X-MCP-Scenario"
+  scenarios_dir: "configs/mock_mcp/scenarios"
+  fixtures_dir: "configs/mock_mcp/fixtures"
+  schemas_dir: "configs/mock_mcp/schemas/tools"
+  allowed_origins: ["*"]
+
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 120
+
+  auth:
+    enabled: false

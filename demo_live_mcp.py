@@ -20,7 +20,7 @@ def main():
     print("==========================================================================\n")
 
     # 1. Initialize Server Manager & Gateway Application
-    manager = ServerManager("config/mcp_servers.yaml")
+    manager = ServerManager("configs/mcp_gateway/gateway_config.yaml")
     app = manager.create_gateway_app()
 
     api_key = "admin-secret-key-123"

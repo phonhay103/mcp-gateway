@@ -41,25 +41,6 @@ class GatewayConfig(BaseModel):
     model_config = {"extra": "ignore"}
 
 
-class BaseMCPServerConfig(BaseModel):
-    """Pydantic v2 Model for Decoupled Base MCP Server Definitions (Scenario-Agnostic)."""
-
-    id: str = Field(default="", description="Unique MCP Server ID")
-    name: str = Field(default="", description="Server Name")
-    description: str = Field(default="", description="Server Description")
-    tools: List[str] = Field(default_factory=list, description="Base Tools provided by this MCP Server")
-    resources: List[str] = Field(default_factory=list, description="Base Resources provided by this MCP Server")
-    prompts: List[str] = Field(default_factory=list, description="Base Prompts provided by this MCP Server")
-
-    model_config = {"extra": "ignore"}
-
-    @model_validator(mode="after")
-    def ensure_id_and_name(self) -> "BaseMCPServerConfig":
-        if not self.id and self.name:
-            self.id = self.name.lower().replace(" ", "-")
-        elif not self.name and self.id:
-            self.name = self.id
-        return self
 
 
 class ToolErrorConfig(BaseModel):
@@ -108,9 +89,6 @@ class ScenarioConfig(BaseModel):
     name: str = Field(default="", description="Human-readable scenario name")
     description: str = Field(default="", description="Scenario description")
     transport: str = Field(default="streamable-http", description="MCP transport protocol ('streamable-http')")
-    prefix: str = Field(default="", description="URL prefix when mounted in Gateway")
-    enable_gateway: bool = Field(default=True, description="Mount on shared gateway port")
-    servers: List[str] = Field(default_factory=list, description="Referenced Base MCP Server IDs")
     fixtures: List[str] = Field(default_factory=list, description="Referenced Fixture filenames")
     tools: List[str] = Field(default_factory=list, description="Explicit tools selection for this scenario")
     resources: List[str] = Field(default_factory=list, description="Explicit resources selection for this scenario")
@@ -127,25 +105,14 @@ class ScenarioConfig(BaseModel):
     model_config = {"extra": "ignore"}
 
     @model_validator(mode="after")
-    def ensure_id_and_prefix(self) -> "ScenarioConfig":
+    def ensure_id(self) -> "ScenarioConfig":
         if not self.id and self.name:
             self.id = self.name.lower().replace(" ", "-")
         elif not self.name and self.id:
             self.name = self.id
-
-        if not self.prefix and self.id:
-            self.prefix = f"/{self.id.lower().replace(' ', '-')}"
-        elif not self.prefix:
-            self.prefix = "/scenario"
-
-        if not self.prefix.startswith("/"):
-            self.prefix = "/" + self.prefix
-
         return self
 
 
-# Backwards compatibility alias for ServerConfig
-ServerConfig = ScenarioConfig
 
 
 class GatewayYamlConfig(BaseModel):
@@ -154,7 +121,6 @@ class GatewayYamlConfig(BaseModel):
     version: str = Field(default="3.0", description="Configuration schema version")
     description: str = Field(default="", description="Configuration file description")
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
-    servers: List[BaseMCPServerConfig] = Field(default_factory=list, description="Decoupled Base MCP Servers")
     scenarios: List[ScenarioConfig] = Field(default_factory=list, description="Scenarios")
 
     model_config = {"extra": "ignore"}

@@ -14,23 +14,6 @@ AVAILABLE_TOOLS: Dict[str, Callable[..., Any]] = {
     "manage_users": tools.manage_users,
     "http_ping": tools.http_ping,
     "generate_random_data": tools.generate_random_data,
-    # Dynamic Tool Discovery Meta-Tools
-    "find_tools": tools.find_tools,
-    "describe_tools": tools.describe_tools,
-    # Code Mode Execution Meta-Tools
-    "list_tool_files": tools.list_tool_files,
-    "read_tool_file": tools.read_tool_file,
-    "get_tool_docs": tools.get_tool_docs,
-    "execute_tool_code": tools.execute_tool_code,
-    # Real-World Debugging & Reproduction Meta-Tools
-    "get_execution_trace": tools.get_execution_trace,
-    "inject_fault_rule": tools.inject_fault_rule,
-    "clear_fault_rules": tools.clear_fault_rules,
-    "create_session_snapshot": tools.create_session_snapshot,
-    "restore_session_snapshot": tools.restore_session_snapshot,
-    "diff_session_snapshots": tools.diff_session_snapshots,
-    "export_repro_bundle": tools.export_repro_bundle,
-    "replay_session_trace": tools.replay_session_trace,
 }
 
 AVAILABLE_RESOURCES: Dict[str, Callable[..., Any]] = {

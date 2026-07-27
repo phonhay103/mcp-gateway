@@ -1,5 +1,5 @@
 """
-GraphQL Server Bridge Registry & Dynamic Translation Engine for Mock MCP Gateway.
+GraphQL Server Registry & Dynamic Translation Engine for Enterprise MCP Gateway.
 Parses GraphQL Schemas (SDL or Introspection) dynamically and translates Queries and Mutations into MCP Tools.
 Proxies MCP 'tools/call' requests to GraphQL endpoints over HTTP while enforcing Gateway
 Security (Hash-Pinning, Description Sanitization, Authorization), trace recording, and metrics.
@@ -28,7 +28,7 @@ from graphql import (
 from mcp_gateway.observability import logger, metrics_collector
 from mcp_gateway.core.schemas import ToolDefinition, schema_registry
 from mcp_gateway.security.security import ToolDescriptionSanitizer, hash_pinning_guard, filter_forwardable_headers
-from mcp_gateway.core.adapters import AdapterRegistry, AdapterStatus, AdapterType, PlugInAdapterConfig, adapter_registry
+from mcp_gateway.core.servers import ServerConfig, ServerStatus, ServerType, server_registry
 
 
 MAX_RESPONSE_BYTES = 50_000  # 50KB safety limit for LLM context window protection
@@ -366,7 +366,7 @@ class GraphQLBridgeRegistry:
                 self._tool_to_server.pop(t_name, None)
             self._schemas.pop(server_id, None)
 
-            adapter_registry.unregister_adapter(server_id)
+            server_registry.unregister_server(server_id)
             logger.info(f"Unregistered GraphQL Bridge Server [{server_id}]")
             return True
         return False
@@ -465,15 +465,16 @@ class GraphQLBridgeRegistry:
 
         self._operations[config.server_id] = op_map
 
-        adapter_cfg = PlugInAdapterConfig(
-            name=config.server_id,
+        server_cfg = ServerConfig(
+            server_id=config.server_id,
+            name=config.name or f"GraphQL Bridge for {config.base_url}",
             description=config.name or f"GraphQL Bridge for {config.base_url}",
-            adapter_type=AdapterType.GRAPHQL_BRIDGE,
+            server_type=ServerType.GRAPHQL_BRIDGE,
             base_url=config.base_url,
             tools=tool_names,
-            status=AdapterStatus.RUNNING,
+            status=ServerStatus.RUNNING,
         )
-        adapter_registry.register_adapter(adapter_cfg)
+        server_registry.register_server(server_cfg)
 
         logger.info(f"Registered GraphQL Bridge [{config.server_id}] with {len(verified_tools)} tools")
         return verified_tools

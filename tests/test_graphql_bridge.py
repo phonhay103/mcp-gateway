@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 from starlette.testclient import TestClient
 
-from mcp_gateway.core.adapters import AdapterStatus, AdapterType, adapter_registry
+from mcp_gateway.core.servers import ServerStatus, ServerType, server_registry
 from mcp_gateway.core.graphql_bridge import GraphQLBridgeConfig, GraphQLParser, graphql_bridge_registry
 from mcp_gateway.core.schemas import ToolDefinition, schema_registry
 from mcp_gateway.core.manager import ServerManager
@@ -41,7 +41,7 @@ type Mutation {
 
 @pytest.fixture
 def gateway_client():
-    config_file = Path("src/mock_mcp/config/mcp_servers.yaml")
+    config_file = Path("configs/mcp_gateway/gateway_config.yaml")
     manager = ServerManager(config_file)
     app = manager.create_gateway_app()
     return TestClient(app)
@@ -78,10 +78,10 @@ async def test_graphql_bridge_registration_and_call():
     tools = await graphql_bridge_registry.register_graphql_server(config)
     assert len(tools) == 4
 
-    adapter = adapter_registry.get_adapter("test-gql-server")
-    assert adapter is not None
-    assert adapter.adapter_type == AdapterType.GRAPHQL_BRIDGE
-    assert adapter.status == AdapterStatus.RUNNING
+    server = server_registry.get_server("test-gql-server")
+    assert server is not None
+    assert server.server_type == ServerType.GRAPHQL_BRIDGE
+    assert server.status == ServerStatus.RUNNING
 
     mock_resp = httpx.Response(
         200,

@@ -14,26 +14,6 @@ from mock_mcp.tools.core_tools import (
     http_ping,
     generate_random_data,
 )
-from mock_mcp.tools.discovery_tools import (
-    find_tools,
-    describe_tools,
-)
-from mock_mcp.tools.codemode_tools import (
-    list_tool_files,
-    read_tool_file,
-    get_tool_docs,
-    execute_tool_code,
-)
-from mock_mcp.tools.debug_tools import (
-    get_execution_trace,
-    inject_fault_rule,
-    clear_fault_rules,
-    create_session_snapshot,
-    restore_session_snapshot,
-    diff_session_snapshots,
-    export_repro_bundle,
-    replay_session_trace,
-)
 from mock_mcp.tools.resources_prompts import (
     system_status_resource,
     users_list_resource,
@@ -51,20 +31,6 @@ __all__ = [
     "manage_users",
     "http_ping",
     "generate_random_data",
-    "find_tools",
-    "describe_tools",
-    "list_tool_files",
-    "read_tool_file",
-    "get_tool_docs",
-    "execute_tool_code",
-    "get_execution_trace",
-    "inject_fault_rule",
-    "clear_fault_rules",
-    "create_session_snapshot",
-    "restore_session_snapshot",
-    "diff_session_snapshots",
-    "export_repro_bundle",
-    "replay_session_trace",
     "system_status_resource",
     "users_list_resource",
     "code_review_prompt",

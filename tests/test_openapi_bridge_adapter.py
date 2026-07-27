@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 from starlette.testclient import TestClient
 
-from mcp_gateway.core.adapters import AdapterStatus, AdapterType, adapter_registry
+from mcp_gateway.core.servers import ServerStatus, ServerType, server_registry
 from mcp_gateway.core.openapi_bridge import OpenAPIBridgeConfig, OpenAPIParser, openapi_bridge_registry
 from mcp_gateway.core.schemas import ToolDefinition, schema_registry
 from mcp_gateway.core.manager import ServerManager
@@ -82,7 +82,7 @@ SAMPLE_OPENAPI_SPEC = {
 @pytest.fixture
 def gateway_client():
     """Fixture providing a TestClient for a configured ServerManager Gateway app."""
-    config_file = Path("src/mock_mcp/config/mcp_servers.yaml")
+    config_file = Path("configs/mcp_gateway/gateway_config.yaml")
     manager = ServerManager(config_file)
     app = manager.create_gateway_app()
     return TestClient(app)
@@ -127,12 +127,12 @@ async def test_register_openapi_server():
     assert "getUserById" in tool_names
     assert "create_pet" in tool_names
 
-    # Verify registration in Adapter Registry
-    adapter = adapter_registry.get_adapter("petstore-openapi")
-    assert adapter is not None
-    assert adapter.adapter_type == AdapterType.OPENAPI_BRIDGE
-    assert adapter.status == AdapterStatus.RUNNING
-    assert "getUserById" in adapter.tools
+    # Verify registration in Server Registry
+    server = server_registry.get_server("petstore-openapi")
+    assert server is not None
+    assert server.server_type == ServerType.OPENAPI_BRIDGE
+    assert server.status == ServerStatus.RUNNING
+    assert "getUserById" in server.tools
 
     # Verify registration in Schema Registry
     schema_tool = schema_registry.get_tool("getUserById")

@@ -288,7 +288,7 @@ async def get_large_payload():
 @pytest.fixture
 def gateway_client():
     """Fixture providing a TestClient for configured Gateway app."""
-    config_file = Path("src/mock_mcp/config/mcp_servers.yaml")
+    config_file = Path("configs/mcp_gateway/gateway_config.yaml")
     manager = ServerManager(config_file)
     app = manager.create_gateway_app()
     return TestClient(app)

@@ -37,6 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && \
 # Copy built virtual environment and source code from builder
 COPY --from=builder --chown=gateway:gateway /app/.venv /app/.venv
 COPY --from=builder --chown=gateway:gateway /app/src /app/src
+COPY --from=builder --chown=gateway:gateway /app/configs /app/configs
 COPY --from=builder --chown=gateway:gateway /app/pyproject.toml /app/pyproject.toml
 
 ENV PATH="/app/.venv/bin:$PATH" \

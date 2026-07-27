@@ -22,8 +22,8 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default=os.getenv("MCP_CONFIG_PATH", "config/mcp_servers.yaml"),
-        help="Path to YAML configuration file for gateway setup (default: config/mcp_servers.yaml)",
+        default=os.getenv("MCP_CONFIG_PATH", "configs/mcp_gateway/gateway_config.yaml"),
+        help="Path to YAML configuration file for gateway setup (default: configs/mcp_gateway/gateway_config.yaml)",
     )
 
     args = parser.parse_args()

@@ -1,6 +1,6 @@
 """
 Global Tool Gateway Router Engine (POST /mcp Data Plane).
-Acts as an intelligent router aggregating tools across all plugged-in adapters (Real Upstream MCP Servers and OpenAPI Bridges).
+Acts as an intelligent router aggregating tools across all core registered MCP servers, OpenAPI REST Bridges, and GraphQL Bridges.
 Applies system-wide security, Trace Recording, Schema Hash-Pinning, Description Sanitization, and Per-Call Auth across all tool call executions.
 """
 
@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from mcp_gateway.core.adapters import AdapterStatus, AdapterType, adapter_registry
+from mcp_gateway.core.servers import ServerStatus, ServerType, server_registry
 from mcp_gateway.security.auth import PerCallAuthorizer
 from mcp_gateway.observability import logger
 from mcp_gateway.core.proxy import upstream_proxy_registry
@@ -18,6 +18,7 @@ from mcp_gateway.core.graphql_bridge import graphql_bridge_registry
 from mcp_gateway.core.schemas import schema_registry
 from mcp_gateway.security.security import ToolDescriptionSanitizer, hash_pinning_guard, extract_forwardable_headers
 from mcp_gateway.core.middleware.header_validation import validate_mcp_headers
+
 
 class ToolGatewayRouter:
     """Global Router handling central POST /mcp JSON-RPC requests."""
@@ -61,7 +62,7 @@ class ToolGatewayRouter:
                             "serverMultiplexing": {"supported": True}
                         }
                     },
-                    "endpoints": {"mcp": "/mcp", "adapters": "/adapters"}
+                    "endpoints": {"mcp": "/mcp", "servers": "/servers"}
                 }
             })
 
@@ -97,9 +98,9 @@ class ToolGatewayRouter:
         if method == "notifications/initialized":
             return JSONResponse({"jsonrpc": "2.0", "result": {}})
 
-        # 6. Handle tools/list method (Aggregates across all running adapters, handling duplicate names with namespace qualification)
+        # 6. Handle tools/list method (Aggregates across all running core servers)
         if method == "tools/list":
-            filter_servers = params.get("servers") or params.get("adapters") or params.get("mcp")
+            filter_servers = params.get("servers") or params.get("mcp")
             if not filter_servers:
                 q_mcp = request.query_params.get("mcp") or request.query_params.get("servers")
                 if q_mcp:
@@ -107,15 +108,15 @@ class ToolGatewayRouter:
 
             aggregated_tools = []
             seen_tools = set()
-            running_adapters = adapter_registry.list_adapters()
+            running_servers = server_registry.list_servers()
 
-            for adapter in running_adapters:
-                if adapter.status != AdapterStatus.RUNNING:
+            for server in running_servers:
+                if server.status != ServerStatus.RUNNING:
                     continue
-                if filter_servers and adapter.name not in filter_servers:
+                if filter_servers and server.server_id not in filter_servers:
                     continue
 
-                for tool_name in adapter.tools:
+                for tool_name in server.tools:
                     tool_def = schema_registry.get_tool(tool_name)
                     if not tool_def:
                         continue
@@ -129,11 +130,11 @@ class ToolGatewayRouter:
                         aggregated_tools.append(mcp_formatted)
                         seen_tools.add(tool_name)
 
-                    # 2. Always expose fully-qualified namespaced version (adapter::tool) to resolve collisions explicitly
-                    qualified_name = f"{adapter.name}::{tool_name}"
+                    # 2. Always expose fully-qualified namespaced version (server_id::tool)
+                    qualified_name = f"{server.server_id}::{tool_name}"
                     qual_formatted = tool_def.to_mcp_format()
                     qual_formatted["name"] = qualified_name
-                    qual_formatted["description"] = f"[{adapter.name}] {ToolDescriptionSanitizer.sanitize_description(tool_def.description)}"
+                    qual_formatted["description"] = f"[{server.server_id}] {ToolDescriptionSanitizer.sanitize_description(tool_def.description)}"
                     aggregated_tools.append(qual_formatted)
 
             return JSONResponse({
@@ -159,11 +160,11 @@ class ToolGatewayRouter:
                 }, status_code=400)
 
             # Handle namespaced or explicit server targeting
-            target_server = params.get("server") or params.get("adapter") or params.get("mcp")
+            target_server_id = params.get("server") or params.get("mcp")
             actual_tool_name = raw_tool_name
             if "::" in raw_tool_name:
                 parts = raw_tool_name.split("::", 1)
-                target_server = parts[0]
+                target_server_id = parts[0]
                 actual_tool_name = parts[1]
 
             tool_name = actual_tool_name
@@ -179,45 +180,45 @@ class ToolGatewayRouter:
                         "error": {"code": -32001, "message": f"Unauthorized: {auth_msg}"},
                     }, status_code=403)
 
-            # Identify target adapter handling this tool with duplicate collision resolution
-            target_adapter = None
-            candidate_adapters = []
+            # Identify target server handling this tool with duplicate collision resolution
+            target_server = None
+            candidate_servers = []
 
-            if target_server:
-                adapter = adapter_registry.get_adapter(target_server)
-                if adapter and adapter.status == AdapterStatus.RUNNING and tool_name in adapter.tools:
-                    target_adapter = adapter
-                if not target_adapter:
+            if target_server_id:
+                server = server_registry.get_server(target_server_id)
+                if server and server.status == ServerStatus.RUNNING and tool_name in server.tools:
+                    target_server = server
+                if not target_server:
                     return JSONResponse({
                         "jsonrpc": "2.0",
                         "id": req_id,
                         "error": {
-                                "code": -32602,
-                                "message": f"Target MCP server/adapter '{target_server}' not found or does not provide tool '{tool_name}'",
-                            },
-                        }, status_code=400)
+                            "code": -32602,
+                            "message": f"Target MCP server '{target_server_id}' not found or does not provide tool '{tool_name}'",
+                        },
+                    }, status_code=400)
             else:
-                for adapter in adapter_registry.list_adapters():
-                    if tool_name in adapter.tools and adapter.status == AdapterStatus.RUNNING:
-                        candidate_adapters.append(adapter)
+                for server in server_registry.list_servers():
+                    if tool_name in server.tools and server.status == ServerStatus.RUNNING:
+                        candidate_servers.append(server)
 
-                if len(candidate_adapters) == 1:
-                    target_adapter = candidate_adapters[0]
-                elif len(candidate_adapters) > 1:
-                    candidate_names = [a.name for a in candidate_adapters]
+                if len(candidate_servers) == 1:
+                    target_server = candidate_servers[0]
+                elif len(candidate_servers) > 1:
+                    candidate_names = [s.server_id for s in candidate_servers]
                     return JSONResponse({
                         "jsonrpc": "2.0",
                         "id": req_id,
                         "error": {
                             "code": -32603,
                             "message": (
-                                f"Ambiguous tool name collision: Tool '{tool_name}' is provided by multiple MCP adapters: {candidate_names}. "
-                                f"Please specify 'server': '<adapter_name>' in parameters, or use fully qualified name '<adapter_name>::{tool_name}'."
+                                f"Ambiguous tool name collision: Tool '{tool_name}' is provided by multiple MCP servers: {candidate_names}. "
+                                f"Please specify 'server': '<server_id>' in parameters, or use fully qualified name '<server_id>::{tool_name}'."
                             ),
                         },
                     }, status_code=400)
                 else:
-                    target_adapter = None
+                    target_server = None
 
             # Validate arguments against schema if registered in schema_registry
             registered_schema_tool = schema_registry.get_tool(tool_name)
@@ -233,33 +234,30 @@ class ToolGatewayRouter:
                         },
                     }, status_code=400)
 
-            execution_result = None
-            is_error = False
-
-            if target_adapter and target_adapter.adapter_type == AdapterType.REAL_UPSTREAM:
+            if target_server and (target_server.server_type == ServerType.REAL_UPSTREAM or target_server.server_type == ServerType.MCP):
                 # Proxy tool call to real upstream MCP server
                 upstream_res = await upstream_proxy_registry.forward_tool_call(
-                    server_id=target_adapter.name,
+                    server_id=target_server.server_id,
                     tool_name=tool_name,
                     tool_args=tool_args,
                     headers_override=client_headers,
                 )
                 return JSONResponse(upstream_res)
 
-            if target_adapter and target_adapter.adapter_type == AdapterType.OPENAPI_BRIDGE:
+            if target_server and target_server.server_type == ServerType.OPENAPI_BRIDGE:
                 # Proxy tool call to REST API endpoint via OpenAPI Bridge
                 openapi_res = await openapi_bridge_registry.call_openapi_tool(
-                    server_id=target_adapter.name,
+                    server_id=target_server.server_id,
                     tool_name=tool_name,
                     tool_args=tool_args,
                     headers_override=client_headers,
                 )
                 return JSONResponse(openapi_res)
 
-            if target_adapter and target_adapter.adapter_type == AdapterType.GRAPHQL_BRIDGE:
+            if target_server and target_server.server_type == ServerType.GRAPHQL_BRIDGE:
                 # Proxy tool call to GraphQL API endpoint via GraphQL Bridge
                 graphql_res = await graphql_bridge_registry.call_graphql_tool(
-                    server_id=target_adapter.name,
+                    server_id=target_server.server_id,
                     tool_name=tool_name,
                     tool_args=tool_args,
                     headers_override=client_headers,
@@ -269,7 +267,7 @@ class ToolGatewayRouter:
             return JSONResponse({
                 "jsonrpc": "2.0",
                 "id": req_id,
-                "error": {"code": -32601, "message": f"Tool '{tool_name}' not found on any running adapter"},
+                "error": {"code": -32601, "message": f"Tool '{tool_name}' not found on any running server"},
             }, status_code=404)
 
         # Default method not supported

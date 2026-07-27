@@ -2,12 +2,10 @@
 id: "sysops-scenario"
 name: "SysOps Monitoring Scenario"
 description: "Scenario chuyên biệt cho việc kiểm tra hạ tầng và ping mạng"
-prefix: "/sysops"
-enable_gateway: true
 
-# Tham chiếu tới MCP Server gốc (Scenario biết server, server KO biết scenario)
-servers:
-  - "system-server"
+tools:
+  - get_system_info
+  - http_ping
 
 fixtures:
   - "sysops_metrics.yaml"
@@ -28,4 +26,3 @@ tool_behaviors:
     mock_result:
       status: "sysops_healthy"
       mode: "high_availability"
-      datacenter: "us-east-1"

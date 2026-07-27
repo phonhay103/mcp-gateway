@@ -1,14 +1,14 @@
 # Scenario: Full Enterprise Sandbox
 id: "full-scenario"
 name: "Full Enterprise Sandbox Scenario"
-description: "Scenario tích hợp ghép nối cả 2 MCP Servers"
-prefix: "/full"
-enable_gateway: true
+description: "Scenario tích hợp đầy đủ tất cả các công cụ của hệ thống"
 
-# Scenario tổng hợp nhiều MCP Servers
-servers:
-  - "system-server"
-  - "utility-server"
+tools:
+  - get_system_info
+  - http_ping
+  - calculate
+  - manage_users
+  - generate_random_data
 
 fixtures:
   - "default_users.yaml"

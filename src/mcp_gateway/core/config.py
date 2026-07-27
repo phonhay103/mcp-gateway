@@ -1,12 +1,12 @@
 """
-Pydantic v2 Models for Gateway Configuration and Adapters.
+Pydantic v2 Models for Gateway Configuration and Servers.
 """
 
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from mcp_gateway.security.auth import AuthConfig
-from mcp_gateway.core.adapters import PlugInAdapterConfig
+from mcp_gateway.core.servers import ServerConfig
 
 
 class RateLimitConfig(BaseModel):
@@ -36,7 +36,6 @@ class GatewayYamlConfig(BaseModel):
     version: str = Field(default="3.0", description="Configuration schema version")
     description: str = Field(default="", description="Configuration file description")
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
-    adapters: List[PlugInAdapterConfig] = Field(default_factory=list, description="Pre-configured Upstream Adapters")
+    servers: List[ServerConfig] = Field(default_factory=list, description="Pre-configured Core Upstream Servers")
 
     model_config = {"extra": "ignore"}
-

@@ -1,5 +1,5 @@
 """
-OpenAPI REST Server Bridge Registry & Dynamic Translation Engine for Mock MCP Gateway.
+OpenAPI Server Registry & Dynamic Translation Engine for Enterprise MCP Gateway.
 Parses OpenAPI v3.0 / v3.1 Specifications dynamically and translates REST endpoints into MCP Tools.
 Proxies MCP 'tools/call' requests to REST endpoints over HTTP while enforcing Gateway
 Security (Hash-Pinning, Description Sanitization, Authorization), trace recording, and metrics.
@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from mcp_gateway.observability import logger, metrics_collector
 from mcp_gateway.core.schemas import ToolDefinition, schema_registry
 from mcp_gateway.security.security import ToolDescriptionSanitizer, hash_pinning_guard, filter_forwardable_headers
-from mcp_gateway.core.adapters import AdapterRegistry, AdapterStatus, AdapterType, PlugInAdapterConfig, adapter_registry
+from mcp_gateway.core.servers import ServerConfig, ServerStatus, ServerType, server_registry
 
 
 MAX_RESPONSE_BYTES = 50_000  # 50KB safety limit for LLM context window protection
@@ -378,7 +378,7 @@ class OpenAPIBridgeRegistry:
             for t_name in ops.keys():
                 self._tool_to_server.pop(t_name, None)
 
-            adapter_registry.unregister_adapter(server_id)
+            server_registry.unregister_server(server_id)
             logger.info(f"Unregistered OpenAPI Bridge Server [{server_id}]")
             return True
         return False
@@ -444,20 +444,21 @@ class OpenAPIBridgeRegistry:
 
         self._operations[config.server_id] = op_map
 
-        # Register as Plug-In Adapter in Control Plane
-        adapter_cfg = PlugInAdapterConfig(
-            name=config.server_id,
+        # Register as Core Gateway Server
+        server_cfg = ServerConfig(
+            server_id=config.server_id,
+            name=config.name or f"OpenAPI REST Bridge for {config.base_url}",
             description=config.name or f"OpenAPI REST Bridge for {config.base_url}",
-            adapter_type=AdapterType.OPENAPI_BRIDGE,
+            server_type=ServerType.OPENAPI_BRIDGE,
             base_url=config.base_url,
             openapi_spec_url=config.openapi_spec_url,
             openapi_spec_path=config.openapi_spec_path,
             headers=config.headers,
             allowed_forward_headers=config.allowed_forward_headers,
             tools=tool_names,
-            status=AdapterStatus.RUNNING,
+            status=ServerStatus.RUNNING,
         )
-        adapter_registry.register_adapter(adapter_cfg)
+        server_registry.register_server(server_cfg)
 
         logger.info(f"Registered OpenAPI Bridge [{config.server_id}] with {len(verified_tools)} REST API tools")
         return verified_tools

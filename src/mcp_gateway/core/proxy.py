@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from mcp_gateway.observability import logger, metrics_collector
 from mcp_gateway.core.schemas import ToolDefinition, schema_registry
 from mcp_gateway.security.security import ToolDescriptionSanitizer, hash_pinning_guard, filter_forwardable_headers
+from mcp_gateway.core.servers import ServerConfig, ServerStatus, ServerType, server_registry
 
 
 class UpstreamMCPServerConfig(BaseModel):
@@ -37,12 +38,24 @@ class UpstreamProxyRegistry:
     def register_server(self, config: UpstreamMCPServerConfig) -> None:
         """Register an external real MCP server."""
         self._servers[config.server_id] = config
+        server_cfg = ServerConfig(
+            server_id=config.server_id,
+            name=config.name,
+            description=config.name,
+            server_type=ServerType.MCP,
+            upstream_url=config.upstream_url,
+            headers=config.headers,
+            allowed_forward_headers=config.allowed_forward_headers,
+            status=ServerStatus.RUNNING,
+        )
+        server_registry.register_server(server_cfg)
         logger.info(f"Registered Real External MCP Server [{config.server_id}] -> {config.upstream_url}")
 
     def unregister_server(self, server_id: str) -> bool:
         """Unregister an external real MCP server."""
         if server_id in self._servers:
             self._servers.pop(server_id)
+            server_registry.unregister_server(server_id)
             logger.info(f"Unregistered External MCP Server [{server_id}]")
             return True
         return False
@@ -122,6 +135,10 @@ class UpstreamProxyRegistry:
                         "server_id": server_id,
                         "upstream_url": srv.upstream_url,
                     }
+
+                core_srv = server_registry.get_server(server_id)
+                if core_srv:
+                    core_srv.tools = [t.name for t in verified_tools]
 
                 logger.info(f"Discovered {len(verified_tools)} secure tools from upstream server [{server_id}]")
                 return verified_tools

@@ -4,7 +4,7 @@ Enterprise MCP Gateway Package.
 
 from mcp_gateway.core.manager import ServerManager
 from mcp_gateway.observability import logger, setup_logging, metrics_collector
-from mcp_gateway.core.adapters import adapter_registry, PlugInAdapterConfig, AdapterStatus, AdapterType
+from mcp_gateway.core.servers import server_registry, ServerConfig, ServerStatus, ServerType
 from mcp_gateway.core.proxy import upstream_proxy_registry, UpstreamMCPServerConfig
 from mcp_gateway.core.openapi_bridge import openapi_bridge_registry, OpenAPIBridgeConfig
 from mcp_gateway.core.graphql_bridge import graphql_bridge_registry, GraphQLBridgeConfig
@@ -18,10 +18,10 @@ __all__ = [
     "logger",
     "setup_logging",
     "metrics_collector",
-    "adapter_registry",
-    "PlugInAdapterConfig",
-    "AdapterStatus",
-    "AdapterType",
+    "server_registry",
+    "ServerConfig",
+    "ServerStatus",
+    "ServerType",
     "upstream_proxy_registry",
     "UpstreamMCPServerConfig",
     "openapi_bridge_registry",

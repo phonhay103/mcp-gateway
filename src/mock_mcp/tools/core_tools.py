@@ -15,7 +15,7 @@ from typing import Annotated, Any, Dict, Optional
 from fastmcp.tools.base import ToolResult
 from pydantic import BaseModel, Field
 
-from mock_mcp.core.session import session_manager
+from mock_mcp.core.context import current_scenario_id, scenario_states
 
 _SERVER_START_TIME = time.time()
 
@@ -37,9 +37,7 @@ class SystemInfoModel(BaseModel):
     cpu_count: Optional[int]
     process_id: int
     uptime_seconds: float
-    session_id: str
     scenario_id: str
-    server_id: str
     metrics: Optional[Dict[str, Any]] = None
 
 
@@ -50,81 +48,55 @@ class EchoOutput(BaseModel):
     reversed: str
     uppercase: str
     timestamp_utc: str
-    session_id: str
     scenario_id: str
-    server_id: str
 
 
 def check_scenario_tool_behavior(
     tool_name: str,
-    session_id: Optional[str] = None,
-    scenario_id: Optional[str] = None,
-    server_id: Optional[str] = None,
 ) -> Optional[ToolResult | Dict[str, Any]]:
     """
-    Check if the active scenario or chaos engine defines a tool-level result override, MCP error definition (isError: true), or injected fault.
-    Returns ToolResult (if error defined) or dict (if mock_result defined), or None if normal execution.
+    Check if the active scenario defines a tool-level result override or MCP error definition (isError: true).
     """
-    from mock_mcp.chaos import chaos_engine
+    from mock_mcp.core.context import current_scenario_id, scenario_configs_map
 
-    session = session_manager.get_session(session_id, scenario_id, server_id)
-
-    # 1. Check Chaos Engine fault injection rules
-    fault = chaos_engine.evaluate_and_apply_sync(session.scenario_id, tool_name)
-    if fault.triggered:
-        if fault.error:
-            return ToolResult(
-                content=fault.error.get("message", "Simulated chaos fault"),
-                meta={"code": fault.error.get("code"), "fault_type": fault.error.get("fault_type")},
-                is_error=True,
-            )
-        elif fault.malformed_response:
-            return fault.malformed_response
-
-    # 2. Check Scenario-level tool behaviors
-    behavior = session.get_tool_behavior(tool_name)
-    if not behavior:
-        rule = session.get_error_simulation(tool_name)
-        if rule:
-            message = rule.get(
-                "message",
-                f"MCP Error simulated for tool '{tool_name}' in scenario '{session.scenario_id}'",
-            )
-            is_err = rule.get("is_error", True)
-            return ToolResult(content=message, is_error=is_err)
+    sc_id = current_scenario_id.get()
+    sc = scenario_configs_map.get(sc_id)
+    if not sc:
         return None
 
-    # Check tool-level error definition
-    err_cfg = behavior.get("error")
-    if err_cfg and isinstance(err_cfg, dict):
-        is_err = err_cfg.get("is_error", True)
-        if is_err:
-            msg = err_cfg.get("message", f"MCP Tool Error defined for '{tool_name}' in scenario '{session.scenario_id}'")
-            code = err_cfg.get("code")
-            details = err_cfg.get("details")
+    # Check tool-level overrides defined in tool_behaviors
+    behavior = sc.tool_behaviors.get(tool_name) if sc.tool_behaviors else None
+    if behavior:
+        # Check tool-level error definition
+        if behavior.error:
+            err = behavior.error
+            if err.is_error:
+                meta = {}
+                if err.code is not None:
+                    meta["code"] = err.code
+                if err.details:
+                    meta["details"] = err.details
+                formatted_msg = f"[Error Code {err.code}] {err.message}" if err.code is not None else err.message
+                return ToolResult(
+                    content=formatted_msg,
+                    meta=meta if meta else None,
+                    is_error=True,
+                )
 
-            meta = {}
-            if code is not None:
-                meta["code"] = code
-            if details:
-                meta["details"] = details
+        # Check tool-level mock result override
+        if behavior.mock_result is not None:
+            res = dict(behavior.mock_result)
+            res["_is_mock"] = True
+            res["scenario_id"] = sc_id
+            return res
 
-            formatted_msg = f"[Error Code {code}] {msg}" if code is not None else msg
-            return ToolResult(
-                content=formatted_msg,
-                meta=meta if meta else None,
-                is_error=True,
-            )
-
-    # Check tool-level mock result override
-    mock_res = behavior.get("mock_result")
-    if mock_res and isinstance(mock_res, dict):
-        res = dict(mock_res)
-        res["_is_mock"] = True
-        res["session_id"] = session.session_id
-        res["scenario_id"] = session.scenario_id
-        res["server_id"] = session.server_id
-        return res
+    # Check error_simulations rules
+    if sc.error_simulations:
+        for rule in sc.error_simulations:
+            if rule.tool == tool_name:
+                message = rule.message or f"MCP Error simulated for tool '{tool_name}' in scenario '{sc_id}'"
+                is_err = rule.is_error if rule.is_error is not None else True
+                return ToolResult(content=message, is_error=is_err)
 
     return None
 
@@ -132,33 +104,32 @@ def check_scenario_tool_behavior(
 def echo(
     message: Annotated[str, Field(description="Message string to echo back")]
 ) -> Dict[str, Any] | ToolResult:
-    """Echo back the provided message along with helpful string metadata and active session context."""
+    """Echo back the provided message along with helpful string metadata and active scenario context."""
     tb = check_scenario_tool_behavior("echo")
     if tb is not None:
         return tb
 
-    session = session_manager.get_session()
+    sc_id = current_scenario_id.get()
     out = EchoOutput(
         original_message=message,
         length=len(message),
         reversed=message[::-1],
         uppercase=message.upper(),
         timestamp_utc=datetime.now(timezone.utc).isoformat(),
-        session_id=session.session_id,
-        scenario_id=session.scenario_id,
-        server_id=session.server_id,
+        scenario_id=sc_id,
     )
     return out.model_dump()
 
 
 def get_system_info() -> Dict[str, Any] | ToolResult:
-    """Retrieve system runtime information combined with session fixture state."""
+    """Retrieve system runtime information combined with active scenario state."""
     tb = check_scenario_tool_behavior("get_system_info")
     if tb is not None:
         return tb
 
-    session = session_manager.get_session()
-    metrics = session.state.get("system_info")
+    sc_id = current_scenario_id.get()
+    state = scenario_states.get(sc_id, {})
+    metrics = state.get("system_info")
 
     info = SystemInfoModel(
         os=platform.system(),
@@ -168,9 +139,7 @@ def get_system_info() -> Dict[str, Any] | ToolResult:
         cpu_count=os.cpu_count(),
         process_id=os.getpid(),
         uptime_seconds=round(time.time() - _SERVER_START_TIME, 2),
-        session_id=session.session_id,
-        scenario_id=session.scenario_id,
-        server_id=session.server_id,
+        scenario_id=sc_id,
         metrics=metrics,
     )
     return info.model_dump()
@@ -184,7 +153,7 @@ def calculate(
     if tb is not None:
         return tb
 
-    session = session_manager.get_session()
+    sc_id = current_scenario_id.get()
     allowed_operators = {
         ast.Add: operator.add,
         ast.Sub: operator.sub,
@@ -222,9 +191,7 @@ def calculate(
             "expression": expression,
             "result": result,
             "status": "success",
-            "session_id": session.session_id,
-            "scenario_id": session.scenario_id,
-            "server_id": session.server_id,
+            "scenario_id": sc_id,
         }
     except Exception as e:
         return ToolResult(content=f"Calculation Error: {e}", is_error=True)
@@ -236,24 +203,23 @@ def manage_users(
     name: Annotated[Optional[str], Field(default=None, description="Full Name (required for 'create' action)")] = None,
     email: Annotated[Optional[str], Field(default=None, description="Email address (required for 'create' action)")] = None,
     role: Annotated[str, Field(default="user", description="User access role (default: 'user')")] = "user",
-    session_id: Annotated[Optional[str], Field(default=None, description="Optional session ID context override")] = None,
-    scenario_id: Annotated[Optional[str], Field(default=None, description="Optional scenario ID context override")] = None,
-    server_id: Annotated[Optional[str], Field(default=None, description="Optional server ID context override")] = None,
 ) -> Dict[str, Any] | ToolResult:
-    """Session & Scenario isolated CRUD operations for user management."""
-    tb = check_scenario_tool_behavior("manage_users", session_id, scenario_id, server_id)
+    """Scenario isolated CRUD operations for user management."""
+    tb = check_scenario_tool_behavior("manage_users")
     if tb is not None:
         return tb
 
-    session = session_manager.get_session(session_id, scenario_id, server_id)
-    user_db = session.user_db
+    sc_id = current_scenario_id.get()
+    if sc_id not in scenario_states:
+        scenario_states[sc_id] = {}
+    if "users" not in scenario_states[sc_id]:
+        scenario_states[sc_id]["users"] = {}
+    user_db = scenario_states[sc_id]["users"]
 
     action = action.lower()
     if action == "list":
         return {
-            "session_id": session.session_id,
-            "scenario_id": session.scenario_id,
-            "server_id": session.server_id,
+            "scenario_id": sc_id,
             "users": list(user_db.values()),
             "count": len(user_db),
         }
@@ -264,9 +230,7 @@ def manage_users(
         if not user:
             return ToolResult(content=f"User with id '{user_id}' not found", is_error=True)
         return {
-            "session_id": session.session_id,
-            "scenario_id": session.scenario_id,
-            "server_id": session.server_id,
+            "scenario_id": sc_id,
             "user": user,
         }
     elif action == "create":
@@ -279,9 +243,7 @@ def manage_users(
             user_db[new_id] = user_model.model_dump()
             return {
                 "status": "created",
-                "session_id": session.session_id,
-                "scenario_id": session.scenario_id,
-                "server_id": session.server_id,
+                "scenario_id": sc_id,
                 "user": user_db[new_id],
             }
         except Exception as exc:
@@ -294,9 +256,7 @@ def manage_users(
             return ToolResult(content=f"User with id '{user_id}' not found", is_error=True)
         return {
             "status": "deleted",
-            "session_id": session.session_id,
-            "scenario_id": session.scenario_id,
-            "server_id": session.server_id,
+            "scenario_id": sc_id,
             "user": deleted,
         }
 
@@ -312,7 +272,7 @@ def http_ping(
     if tb is not None:
         return tb
 
-    session = session_manager.get_session()
+    sc_id = current_scenario_id.get()
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
 
@@ -328,9 +288,7 @@ def http_ping(
                 "latency_ms": latency,
                 "headers": headers,
                 "success": True,
-                "session_id": session.session_id,
-                "scenario_id": session.scenario_id,
-                "server_id": session.server_id,
+                "scenario_id": sc_id,
             }
     except Exception as e:
         return ToolResult(content=f"HTTP Ping Failed for '{url}': {e}", is_error=True)
@@ -346,7 +304,7 @@ def generate_random_data(
         return tb
 
     import uuid
-    session = session_manager.get_session()
+    sc_id = current_scenario_id.get()
     count = max(1, min(count, 50))
     results = []
     for _ in range(count):
@@ -363,7 +321,5 @@ def generate_random_data(
         "type": type_name,
         "count": len(results),
         "items": results,
-        "session_id": session.session_id,
-        "scenario_id": session.scenario_id,
-        "server_id": session.server_id,
+        "scenario_id": sc_id,
     }
