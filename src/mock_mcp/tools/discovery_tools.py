@@ -8,7 +8,7 @@ import re
 from typing import Annotated, Any, Dict, List, Optional
 from pydantic import Field
 
-from mcp_gateway.core.session import session_manager
+from mock_mcp.core.session import session_manager
 
 
 def find_tools(
@@ -20,8 +20,8 @@ def find_tools(
     Dynamic Tool Discovery Meta-Tool: Perform Progressive/Semantic Search over catalog schemas, with optional MCP adapter filtering.
     Drastically reduces LLM context window token overhead from >30k tokens down to ~1,300 tokens.
     """
-    from mcp_gateway.schemas import schema_registry
-    from mcp_gateway.core.adapters import adapter_registry
+    from mock_mcp.schemas import schema_registry
+    from mock_mcp.core.adapters import adapter_registry
 
     allowed_tools = None
     if mcp_filter:
@@ -73,7 +73,7 @@ def describe_tools(
     """
     Dynamic Tool Discovery Meta-Tool: Retrieve complete JSON input schemas for specific tools on demand.
     """
-    from mcp_gateway.schemas import schema_registry
+    from mock_mcp.schemas import schema_registry
 
     matched_schemas = []
     for name in tool_names:

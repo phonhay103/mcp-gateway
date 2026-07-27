@@ -102,10 +102,6 @@ class AuthConfig(BaseModel):
             "/health",
             "/metrics",
             "/favicon.ico",
-            "/scenarios",
-            "/scenarios/select",
-            "/scenarios/clear",
-            "/sessions",
             "/tools",
         ],
         description="Exempt public paths from authentication",
@@ -224,11 +220,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if not self.auth_config.enabled:
             return await call_next(request)
 
-        # Allow anonymous public paths or management endpoints (/sessions/*, /scenarios/*, /tools/*, /metrics)
+        # Allow anonymous public paths or management endpoints (/tools/*, /metrics)
         if (
             request.url.path in self.auth_config.allow_anonymous_paths
-            or request.url.path.startswith("/sessions")
-            or request.url.path.startswith("/scenarios")
             or request.url.path.startswith("/tools")
             or request.url.path.startswith("/metrics")
         ):

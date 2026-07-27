@@ -13,7 +13,6 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from mcp_gateway.logger import log_audit_event, logger
-from mcp_gateway.session import generate_uuid7
 
 
 class SchemaHashPinningGuard:
@@ -116,7 +115,7 @@ class EnterpriseSecurityMiddleware(BaseHTTPMiddleware):
             )
 
         # Extract or generate correlation request ID using UUID v7
-        request_id = request.headers.get("X-Request-ID") or generate_uuid7()
+        request_id = request.headers.get("X-Request-ID") or "auto-generated-id"
         request.state.request_id = request_id
 
         response: Response = await call_next(request)
@@ -194,7 +193,7 @@ def filter_forwardable_headers(client_headers: Dict[str, str], allowed_list: Opt
     }
     
     # Protocol standard headers that should always pass through if present
-    protocol_standards = {"x-request-id", "traceparent", "tracestate"}
+    protocol_standards = {"x-request-id", "traceparent", "tracestate", "x-session-id", "x-mcp-scenario", "x-scenario-id"}
     
     for key, value in client_headers.items():
         key_lower = key.lower()

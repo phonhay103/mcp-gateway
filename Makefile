@@ -1,4 +1,4 @@
-.PHONY: help install test run run-gateway run-multi run-hybrid run-streamable build up down logs restart clean
+.PHONY: help install test run run-gateway run-mock build up down logs restart clean
 
 # Default target
 .DEFAULT_GOAL := help
@@ -15,19 +15,13 @@ install: ## Install dependencies using uv
 test: ## Run unit tests with pytest
 	uv run pytest -v
 
-run: run-hybrid ## Run in Enterprise Hybrid mode (Shared Gateway + Dedicated Ports)
+run: run-gateway ## Run Enterprise Shared Gateway on port 2026
 
-run-gateway: ## Run multi-MCP in Shared Gateway mode (port 2026 only)
-	uv run mcp-gateway --mode gateway --config config/mcp_servers.yaml
+run-gateway: ## Run Enterprise Gateway (port 2026)
+	uv run mcp-gateway --config config/mcp_servers.yaml
 
-run-multi: ## Run multi-MCP on Dedicated Ports only
-	uv run mcp-gateway --mode multi-port --config config/mcp_servers.yaml
-
-run-hybrid: ## Run BOTH Shared Gateway (port 2026) AND Dedicated Ports
-	uv run mcp-gateway --mode hybrid --config config/mcp_servers.yaml
-
-run-streamable: ## Run single MCP server in HTTP Streamable / SSE mode
-	uv run mcp-gateway --mode single --transport streamable-http
+run-mock: ## Run Standalone Mock MCP Service (port 2027)
+	uv run mock-mcp --config config/mcp_servers.yaml
 
 build: ## Build Docker container image
 	docker compose build

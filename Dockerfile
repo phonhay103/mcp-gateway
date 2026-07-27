@@ -36,7 +36,6 @@ COPY --from=builder --chown=gateway:gateway /app/pyproject.toml /app/pyproject.t
 COPY --from=builder --chown=gateway:gateway /app/config /app/config
 
 ENV PATH="/app/.venv/bin:$PATH" \
-    MCP_MODE="gateway" \
     MCP_CONFIG_PATH="config/mcp_servers.yaml" \
     PYTHONUNBUFFERED=1
 

@@ -23,7 +23,6 @@ class UpstreamMCPServerConfig(BaseModel):
     upstream_url: str = Field(..., description="Streamable HTTP or REST endpoint of real external MCP server (e.g. 'http://external-mcp:8080/mcp')")
     headers: Dict[str, str] = Field(default_factory=dict, description="Custom HTTP headers (e.g. Authorization, X-API-Key)")
     timeout_seconds: float = Field(default=30.0, ge=1.0, description="HTTP timeout in seconds")
-    scenario_id: Optional[str] = Field(default=None, description="Optional Scenario ID to automatically mount this server under")
     allowed_forward_headers: List[str] = Field(default_factory=list, description="Whitelist of client-supplied headers allowed to be forwarded downstream")
 
     model_config = {"extra": "ignore"}

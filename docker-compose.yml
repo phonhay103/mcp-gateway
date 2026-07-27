@@ -7,7 +7,6 @@ services:
     ports:
       - "2026:2026"   # Shared Gateway Port (Định tuyến thông minh qua Headers / Namespaces)
     environment:
-      - MCP_MODE=hybrid
       - MCP_CONFIG_PATH=config/mcp_servers.yaml
       - LOG_LEVEL=INFO
     volumes:
@@ -20,7 +19,7 @@ services:
     cap_drop:
       - ALL
     
-    # CPU & Memory Limits (Prevents container resource exhaustion)
+    # CPU & Memory Limits
     deploy:
       resources:
         limits:
@@ -29,7 +28,7 @@ services:
         reservations:
           memory: 128M
 
-    # Log Rotation Policy (Prevents disk exhaustion from container logs)
+    # Log Rotation Policy
     logging:
       driver: "json-file"
       options:
@@ -39,6 +38,56 @@ services:
     # Lightweight Healthcheck using curl
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:2026/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  mock-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mock-mcp
+    command: ["mock-mcp"]
+    ports:
+      - "2027:2027"   # Standalone Mock MCP Port
+    environment:
+      - MCP_CONFIG_PATH=config/mcp_servers.yaml
+      - LOG_LEVEL=INFO
+      - GATEWAY_REGISTER_URL=http://mcp-gateway:2026
+      - MOCK_SERVICE_URL=http://mock-mcp:2027
+      - GATEWAY_API_KEY=admin-secret-key-123
+    volumes:
+      - ./config:/app/config:ro
+    restart: unless-stopped
+    depends_on:
+      - mcp-gateway
+
+    # Enterprise Security Hardening
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    # CPU & Memory Limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 128M
+
+    # Log Rotation Policy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Lightweight Healthcheck using curl
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2027/health"]
       interval: 10s
       timeout: 5s
       retries: 3

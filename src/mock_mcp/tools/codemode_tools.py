@@ -8,12 +8,12 @@ from typing import Annotated, Any, Dict
 from fastmcp.tools.base import ToolResult
 from pydantic import Field
 
-from mcp_gateway.core.session import session_manager
+from mock_mcp.core.session import session_manager
 
 
 def list_tool_files() -> Dict[str, Any]:
     """Code Mode Meta-Tool: List available tools as virtual file paths for script inspect & execution."""
-    from mcp_gateway.schemas import schema_registry
+    from mock_mcp.schemas import schema_registry
 
     files = [f"/tools/{name}.py" for name in schema_registry.tools.keys()]
     session = session_manager.get_session()
@@ -28,7 +28,7 @@ def read_tool_file(
     path: Annotated[str, Field(description="Virtual tool file path (e.g. '/tools/manage_users.py')")]
 ) -> Dict[str, Any] | ToolResult:
     """Code Mode Meta-Tool: Inspect functional signatures and documentation for a virtual tool file."""
-    from mcp_gateway.schemas import schema_registry
+    from mock_mcp.schemas import schema_registry
 
     tool_name = path.split("/")[-1].replace(".py", "")
     tool_def = schema_registry.get_tool(tool_name)
@@ -49,7 +49,7 @@ def get_tool_docs(
     tool_name: Annotated[str, Field(description="Tool name to retrieve markdown documentation for")]
 ) -> Dict[str, Any] | ToolResult:
     """Code Mode Meta-Tool: Retrieve detailed functional documentation for a tool."""
-    from mcp_gateway.schemas import schema_registry
+    from mock_mcp.schemas import schema_registry
 
     tool_def = schema_registry.get_tool(tool_name)
     if not tool_def:

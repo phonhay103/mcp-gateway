@@ -1,8 +1,7 @@
 """
 Global Tool Gateway Router Engine (POST /mcp Data Plane).
-Acts as an intelligent router aggregating tools across all plugged-in adapters (Local Mocks, Scenarios, Real Upstream MCP Servers).
-Applies system-wide specialized mock features (Chaos Fault Injection, Time-Travel Snapshots, Trace Recording,
-Schema Hash-Pinning, Description Sanitization, Per-Call Auth) across all tool call executions transparently.
+Acts as an intelligent router aggregating tools across all plugged-in adapters (Real Upstream MCP Servers and OpenAPI Bridges).
+Applies system-wide security, Trace Recording, Schema Hash-Pinning, Description Sanitization, and Per-Call Auth across all tool call executions.
 """
 
 import time
@@ -13,17 +12,11 @@ from starlette.responses import JSONResponse, Response
 from mcp_gateway.core.adapters import AdapterStatus, AdapterType, adapter_registry
 from mcp_gateway.security.auth import PerCallAuthorizer
 from mcp_gateway.logger import logger
-from mcp_gateway.observability.metrics import metrics_collector
 from mcp_gateway.core.proxy import upstream_proxy_registry
 from mcp_gateway.core.openapi_bridge import openapi_bridge_registry
-from mcp_gateway.observability.recorder import trace_recorder
 from mcp_gateway.core.schemas import schema_registry
 from mcp_gateway.security import ToolDescriptionSanitizer, hash_pinning_guard, extract_forwardable_headers
-from mcp_gateway.session import session_manager
 from mcp_gateway.core.middleware.header_validation import validate_mcp_headers
-from mcp_gateway.core.middleware.chaos_middleware import evaluate_chaos
-from mcp_gateway.core.extensions.mcp_extensions import task_manager
-
 
 class ToolGatewayRouter:
     """Global Router handling central POST /mcp JSON-RPC requests."""
@@ -31,9 +24,6 @@ class ToolGatewayRouter:
     @staticmethod
     async def handle_mcp_request(request: Request) -> Response:
         """Process incoming Streamable HTTP JSON-RPC request at POST /mcp."""
-        session_id = getattr(request.state, "session_id", "default_session")
-        scenario_id = getattr(request.state, "scenario_id", "default_scenario")
-
         # Extract client custom headers to preserve and forward downstream end-to-end
         client_headers = extract_forwardable_headers(request)
 
@@ -55,37 +45,8 @@ class ToolGatewayRouter:
         if header_error:
             return header_error
 
-        # 2. Handle Tasks Extension Methods (MCP 2026-07-28)
-        if method in ("tasks/get", "tasks/list", "tasks/cancel", "tasks/update"):
-            task_id = params.get("taskId") or params.get("id") or "task-mock-2026-001"
-            metrics_collector.record_request("POST", "/mcp", 200)
-
-            if method == "tasks/get":
-                task = task_manager.get_task(task_id)
-                if not task:
-                    task = task_manager.create_task(task_id, "default_tool", {})
-                res_data = task
-            elif method == "tasks/update":
-                updates = params.get("inputResponses", {"status": "completed"})
-                task = task_manager.update_task(task_id, {"status": "completed", "progress": 100, "result": updates})
-                if not task:
-                    task = task_manager.create_task(task_id, "default_tool", updates)
-                res_data = task
-            elif method == "tasks/cancel":
-                success = task_manager.cancel_task(task_id)
-                res_data = {"taskId": task_id, "status": "cancelled" if success else "notFound"}
-            else: # tasks/list
-                res_data = {"tasks": list(task_manager._tasks.values())}
-
-            return JSONResponse({
-                "jsonrpc": "2.0",
-                "id": req_id,
-                "result": res_data
-            })
-
-        # 3. Handle server/discover method (MCP 2026-07-28 stateless capability discovery)
+        # 2. Handle server/discover method (MCP 2026-07-28 stateless capability discovery)
         if method == "server/discover":
-            metrics_collector.record_request("POST", "/mcp", 200)
             return JSONResponse({
                 "jsonrpc": "2.0",
                 "id": req_id,
@@ -95,8 +56,8 @@ class ToolGatewayRouter:
                     "capabilities": {
                         "statelessCore": True,
                         "extensions": {
-                            "mcp-apps": {"supported": True, "version": "1.0"},
-                            "tasks": {"supported": True, "version": "1.0"}
+                            "tasks": {"supported": False},
+                            "serverMultiplexing": {"supported": True}
                         }
                     },
                     "endpoints": {"mcp": "/mcp", "adapters": "/adapters"}
@@ -174,7 +135,6 @@ class ToolGatewayRouter:
                     qual_formatted["description"] = f"[{adapter.name}] {ToolDescriptionSanitizer.sanitize_description(tool_def.description)}"
                     aggregated_tools.append(qual_formatted)
 
-            metrics_collector.record_request("POST", "/mcp", 200)
             return JSONResponse({
                 "jsonrpc": "2.0",
                 "id": req_id,
@@ -218,74 +178,45 @@ class ToolGatewayRouter:
                         "error": {"code": -32001, "message": f"Unauthorized: {auth_msg}"},
                     }, status_code=403)
 
-            # Measure Execution & Initial State for Trace
-            start_time = time.time()
-            session = session_manager.get_session(session_id=session_id)
-            initial_state = dict(session.state)
-
-            # SYSTEM-WIDE SPECIALIZED MOCK FEATURE: Chaos & Fault Injection Middleware Evaluation
-            chaos_response = evaluate_chaos(scenario_id, tool_name, tool_args, req_id)
-            if chaos_response:
-                duration_ms = (time.time() - start_time) * 1000
-                trace_recorder.record_call(
-                    session_id=session.session_id,
-                    scenario_id=scenario_id,
-                    tool_name=tool_name,
-                    tool_args=tool_args,
-                    initial_state=initial_state,
-                    final_state=dict(session.state),
-                    duration_ms=duration_ms,
-                    is_error=True,
-                    error_details={"message": "Chaos Fault Injected"},
-                )
-                return chaos_response
-
-            # Identify target adapter handling this tool with duplicate collision resolution & scenario priority
+            # Identify target adapter handling this tool with duplicate collision resolution
             target_adapter = None
             candidate_adapters = []
 
-            # 1. Prioritize adapter matching current scenario_id if valid
-            if scenario_id and scenario_id != "default_scenario":
-                sc_adapter = adapter_registry.get_adapter(scenario_id)
-                if sc_adapter and sc_adapter.status == AdapterStatus.RUNNING and tool_name in sc_adapter.tools:
-                    target_adapter = sc_adapter
-
-            if not target_adapter:
-                if target_server:
-                    adapter = adapter_registry.get_adapter(target_server)
-                    if adapter and adapter.status == AdapterStatus.RUNNING and tool_name in adapter.tools:
-                        target_adapter = adapter
-                    if not target_adapter:
-                        return JSONResponse({
-                            "jsonrpc": "2.0",
-                            "id": req_id,
-                            "error": {
+            if target_server:
+                adapter = adapter_registry.get_adapter(target_server)
+                if adapter and adapter.status == AdapterStatus.RUNNING and tool_name in adapter.tools:
+                    target_adapter = adapter
+                if not target_adapter:
+                    return JSONResponse({
+                        "jsonrpc": "2.0",
+                        "id": req_id,
+                        "error": {
                                 "code": -32602,
                                 "message": f"Target MCP server/adapter '{target_server}' not found or does not provide tool '{tool_name}'",
                             },
                         }, status_code=400)
-                else:
-                    for adapter in adapter_registry.list_adapters():
-                        if tool_name in adapter.tools and adapter.status == AdapterStatus.RUNNING:
-                            candidate_adapters.append(adapter)
+            else:
+                for adapter in adapter_registry.list_adapters():
+                    if tool_name in adapter.tools and adapter.status == AdapterStatus.RUNNING:
+                        candidate_adapters.append(adapter)
 
-                    if len(candidate_adapters) == 1:
-                        target_adapter = candidate_adapters[0]
-                    elif len(candidate_adapters) > 1:
-                        candidate_names = [a.name for a in candidate_adapters]
-                        return JSONResponse({
-                            "jsonrpc": "2.0",
-                            "id": req_id,
-                            "error": {
-                                "code": -32603,
-                                "message": (
-                                    f"Ambiguous tool name collision: Tool '{tool_name}' is provided by multiple MCP adapters: {candidate_names}. "
-                                    f"Please specify 'server': '<adapter_name>' in parameters, use fully qualified name '<adapter_name>::{tool_name}', or set scenario context."
-                                ),
-                            },
-                        }, status_code=400)
-                    else:
-                        target_adapter = None
+                if len(candidate_adapters) == 1:
+                    target_adapter = candidate_adapters[0]
+                elif len(candidate_adapters) > 1:
+                    candidate_names = [a.name for a in candidate_adapters]
+                    return JSONResponse({
+                        "jsonrpc": "2.0",
+                        "id": req_id,
+                        "error": {
+                            "code": -32603,
+                            "message": (
+                                f"Ambiguous tool name collision: Tool '{tool_name}' is provided by multiple MCP adapters: {candidate_names}. "
+                                f"Please specify 'server': '<adapter_name>' in parameters, or use fully qualified name '<adapter_name>::{tool_name}'."
+                            ),
+                        },
+                    }, status_code=400)
+                else:
+                    target_adapter = None
 
             # Validate arguments against schema if registered in schema_registry
             registered_schema_tool = schema_registry.get_tool(tool_name)
@@ -312,21 +243,6 @@ class ToolGatewayRouter:
                     tool_args=tool_args,
                     headers_override=client_headers,
                 )
-                duration_ms = (time.time() - start_time) * 1000
-                final_state = dict(session.state)
-
-                trace_recorder.record_call(
-                    session_id=session.session_id,
-                    scenario_id=scenario_id,
-                    tool_name=tool_name,
-                    tool_args=tool_args,
-                    initial_state=initial_state,
-                    final_state=final_state,
-                    duration_ms=duration_ms,
-                    is_error="error" in upstream_res,
-                    result_payload=upstream_res.get("result"),
-                )
-                metrics_collector.record_tool_call(tool_name, "success" if "result" in upstream_res else "error")
                 return JSONResponse(upstream_res)
 
             if target_adapter and target_adapter.adapter_type == AdapterType.OPENAPI_BRIDGE:
@@ -337,80 +253,13 @@ class ToolGatewayRouter:
                     tool_args=tool_args,
                     headers_override=client_headers,
                 )
-                duration_ms = (time.time() - start_time) * 1000
-                final_state = dict(session.state)
-
-                is_res_error = bool("error" in openapi_res or (
-                    isinstance(openapi_res.get("result"), dict) and openapi_res.get("result", {}).get("isError", False)
-                ))
-
-                trace_recorder.record_call(
-                    session_id=session.session_id,
-                    scenario_id=scenario_id,
-                    tool_name=tool_name,
-                    tool_args=tool_args,
-                    initial_state=initial_state,
-                    final_state=final_state,
-                    duration_ms=duration_ms,
-                    is_error=is_res_error,
-                    result_payload=openapi_res.get("result"),
-                )
-                metrics_collector.record_tool_call(tool_name, "error" if is_res_error else "success")
                 return JSONResponse(openapi_res)
-
-            # Local / Scenario execution fallback via registry tools
-            from mcp_gateway.core.registry import AVAILABLE_TOOLS
-            if tool_name in AVAILABLE_TOOLS:
-                try:
-                    func = AVAILABLE_TOOLS[tool_name]
-                    res = func(**tool_args) if tool_args else func()
-
-                    if getattr(res, "is_error", False) or (isinstance(res, dict) and res.get("is_error")):
-                        is_error = True
-                        content_str = str(getattr(res, "content", res))
-                        execution_result = {"content": [{"type": "text", "text": content_str}], "isError": True}
-                    else:
-                        content_data = res if isinstance(res, dict) else {"result": res}
-                        execution_result = {
-                            "content": [{"type": "text", "text": str(content_data)}],
-                            "structuredContent": content_data,
-                            "isError": False,
-                        }
-                except Exception as exc:
-                    is_error = True
-                    execution_result = {
-                        "content": [{"type": "text", "text": f"Tool Execution Error: {exc}"}],
-                        "isError": True,
-                    }
-            else:
-                return JSONResponse({
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "error": {"code": -32601, "message": f"Tool '{tool_name}' not found on any running adapter"},
-                }, status_code=404)
-
-            duration_ms = (time.time() - start_time) * 1000
-            final_state = dict(session.state)
-
-            # SYSTEM-WIDE SPECIALIZED MOCK FEATURE: Execution Trace Recording
-            trace_recorder.record_call(
-                session_id=session.session_id,
-                scenario_id=scenario_id,
-                tool_name=tool_name,
-                tool_args=tool_args,
-                initial_state=initial_state,
-                final_state=final_state,
-                duration_ms=duration_ms,
-                is_error=is_error,
-                result_payload=execution_result,
-            )
-            metrics_collector.record_tool_call(tool_name, "error" if is_error else "success")
 
             return JSONResponse({
                 "jsonrpc": "2.0",
                 "id": req_id,
-                "result": execution_result,
-            })
+                "error": {"code": -32601, "message": f"Tool '{tool_name}' not found on any running adapter"},
+            }, status_code=404)
 
         # Default method not supported
         return JSONResponse({

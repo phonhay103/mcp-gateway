@@ -1,9 +1,7 @@
 """
-Plug-In / Plug-Out Adapter Architecture for Mock and Real MCP Servers.
-Treats all MCP Servers—whether Local FastMCP Mocks, Dynamic Fixture Scenarios, or Real External Upstream MCP Servers—
+Plug-In / Plug-Out Adapter Architecture for Real and OpenAPI MCP Servers.
+Treats all MCP Servers—whether Real Upstream MCP Servers or OpenAPI REST Bridges—
 as modular Plug-In Adapters with uniform Control Plane management (/adapters) and Data Plane routing (/adapters/{name}/mcp).
-System-wide specialized mock features (Chaos Fault Injection, Time-Travel Snapshots, Trace Recording,
-Schema Hash-Pinning, Description Sanitization, Per-Call Auth) are seamlessly applied to all adapters.
 """
 
 from enum import Enum
@@ -19,8 +17,6 @@ from mcp_gateway.core.schemas import ToolDefinition, schema_registry
 class AdapterType(str, Enum):
     """Supported MCP Adapter Types."""
 
-    MOCK_LOCAL = "mock_local"
-    SCENARIO = "scenario"
     REAL_UPSTREAM = "real_upstream"
     OPENAPI_BRIDGE = "openapi_bridge"
 
@@ -39,7 +35,7 @@ class PlugInAdapterConfig(BaseModel):
 
     name: str = Field(..., description="Unique Adapter Name / ID (e.g. 'sysops-mock', 'external-weather-mcp')")
     description: str = Field(default="", description="Adapter description")
-    adapter_type: AdapterType = Field(default=AdapterType.MOCK_LOCAL, description="Adapter type")
+    adapter_type: AdapterType = Field(default=AdapterType.REAL_UPSTREAM, description="Adapter type")
     upstream_url: Optional[str] = Field(default=None, description="HTTP URL for real upstream MCP server")
     openapi_spec_url: Optional[str] = Field(default=None, description="HTTP URL for OpenAPI spec (json/yaml)")
     openapi_spec_path: Optional[str] = Field(default=None, description="Local file path for OpenAPI spec (json/yaml)")

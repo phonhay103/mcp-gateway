@@ -39,7 +39,6 @@ class OpenAPIBridgeConfig(BaseModel):
     headers: Dict[str, str] = Field(default_factory=dict, description="Custom HTTP headers for REST calls (e.g. Authorization)")
     allowed_forward_headers: List[str] = Field(default_factory=list, description="Whitelist of client-supplied headers allowed to be forwarded downstream")
     timeout_seconds: float = Field(default=30.0, ge=1.0, description="HTTP timeout in seconds")
-    scenario_id: Optional[str] = Field(default=None, description="Optional Scenario ID to associate with")
 
     model_config = {"extra": "ignore"}
 

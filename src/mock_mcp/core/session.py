@@ -282,12 +282,22 @@ class SessionMiddleware(BaseHTTPMiddleware):
         request.state.scenario_id = scenario_id
         request.state.server_id = server_id
 
+        # Resolve initial fixture state for current scenario
+        init_state = None
+        if callable(self.initial_fixture_state):
+            init_state = self.initial_fixture_state(scenario_id)
+        elif isinstance(self.initial_fixture_state, dict):
+            if scenario_id in self.initial_fixture_state:
+                init_state = self.initial_fixture_state[scenario_id]
+            else:
+                init_state = self.initial_fixture_state
+
         # Ensure session instance exists in SessionManager
         session_manager.get_or_create_session(
             session_id=session_id,
             scenario_id=scenario_id,
             server_id=server_id,
-            initial_state=self.initial_fixture_state,
+            initial_state=init_state,
         )
 
         try:

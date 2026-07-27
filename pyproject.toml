@@ -23,7 +23,7 @@ dev = [
 
 [project.scripts]
 mcp-gateway = "mcp_gateway.main:main"
-mock-mcp = "mcp_gateway.main:main"
+mock-mcp = "mock_mcp.main:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Union
 import yaml
 
-from mcp_gateway.logger import logger
+from mock_mcp.logger import logger
 
 
 class FixtureLoader:

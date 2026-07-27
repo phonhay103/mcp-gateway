@@ -13,9 +13,9 @@ import time
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
-from mcp_gateway.logger import logger
-from mcp_gateway.observability.metrics import metrics_collector
-from mcp_gateway.core.session import generate_uuid7
+from mock_mcp.logger import logger
+from mock_mcp.observability.metrics import metrics_collector
+from mock_mcp.core.session import generate_uuid7
 
 
 class FaultType(str, Enum):

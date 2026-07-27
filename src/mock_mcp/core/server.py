@@ -3,7 +3,7 @@ Server factory and default server instance.
 """
 
 from fastmcp import FastMCP
-from mcp_gateway.core.registry import register_features
+from mock_mcp.core.registry import register_features
 
 
 def create_mcp_server(

@@ -12,7 +12,7 @@ from typing import Any, Callable, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from loguru import logger
-from mcp_gateway.core.session import generate_uuid7, session_manager
+from mock_mcp.core.session import generate_uuid7, session_manager
 
 
 def compute_state_hash(state: Dict[str, Any]) -> str:

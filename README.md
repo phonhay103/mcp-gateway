@@ -129,8 +129,9 @@ Hệ thống loại bỏ hoàn toàn giao thức STDIO để chuẩn hóa **100%
 | :--- | :--- |
 | `make install` | Cài đặt các thư viện phụ thuộc bằng `uv` với Python 3.14 |
 | `make test` | Chạy bộ kiểm thử tự động pytest trên Python 3.14 |
-| `make run` / `make run-gateway` | Chạy Enterprise Unified Gateway (Cổng chung 2026 duy nhất, không expose port riêng cho từng mock) |
-| `make up` | Khởi chạy Docker Compose Gateway ở background |
+| `make run` / `make run-gateway` | Chạy Enterprise Unified Gateway (Port 2026) |
+| `make run-mock` | Chạy Standalone Mock MCP Service (Port 2027) |
+| `make up` | Khởi chạy Docker Compose (mcp-gateway:2026 & mock-mcp:2027) ở background |
 
 ---
 

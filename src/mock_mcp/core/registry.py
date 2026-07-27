@@ -4,7 +4,7 @@ Registry mapping tools, meta-tools, resources, and prompts for dynamic server co
 
 from typing import Any, Callable, Dict, List
 from fastmcp import FastMCP
-from mcp_gateway import tools
+from mock_mcp import tools
 
 AVAILABLE_TOOLS: Dict[str, Callable[..., Any]] = {
     # Core Tools

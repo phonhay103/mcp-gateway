@@ -7,14 +7,14 @@ from typing import Annotated, Any, Dict, List, Optional
 from fastmcp.tools.base import ToolResult
 from pydantic import Field
 
-from mcp_gateway.core.session import session_manager
+from mock_mcp.core.session import session_manager
 
 
 def get_execution_trace(
     session_id: Annotated[Optional[str], Field(default=None, description="Session ID to retrieve trace for (defaults to active session)")] = None
 ) -> Dict[str, Any]:
     """Real-World Debug Meta-Tool: Retrieve chronological execution trace of tool calls for a session."""
-    from mcp_gateway.recorder import trace_recorder
+    from mock_mcp.recorder import trace_recorder
 
     session = session_manager.get_session(session_id=session_id)
     records = trace_recorder.get_session_trace(session.session_id)
@@ -35,7 +35,7 @@ def inject_fault_rule(
     http_status: Annotated[Optional[int], Field(default=None, description="HTTP status code (e.g. 429, 502, 503, 504)")] = None,
 ) -> Dict[str, Any]:
     """Real-World Debug Meta-Tool: Dynamically configure fault injection to reproduce flaky or edge-case bugs."""
-    from mcp_gateway.chaos import FaultRule, FaultType, chaos_engine
+    from mock_mcp.chaos import FaultRule, FaultType, chaos_engine
 
     try:
         ftype = FaultType(fault_type)
@@ -63,7 +63,7 @@ def clear_fault_rules(
     scenario_id: Annotated[Optional[str], Field(default=None, description="Target scenario ID to clear rules for, or None for all")] = None
 ) -> Dict[str, Any]:
     """Real-World Debug Meta-Tool: Clear active fault injection rules."""
-    from mcp_gateway.chaos import chaos_engine
+    from mock_mcp.chaos import chaos_engine
 
     cleared = chaos_engine.clear_rules(scenario_id=scenario_id)
     return {
@@ -123,8 +123,8 @@ def export_repro_bundle(
     session_id: Annotated[Optional[str], Field(default=None, description="Session ID to export repro bundle for")] = None
 ) -> Dict[str, Any]:
     """Real-World Debug Meta-Tool: Export a self-contained ReproBundle (.mcp-repro.json) for sharing & CI replay."""
-    from mcp_gateway.chaos import chaos_engine
-    from mcp_gateway.recorder import trace_recorder
+    from mock_mcp.chaos import chaos_engine
+    from mock_mcp.recorder import trace_recorder
 
     session = session_manager.get_session(session_id=session_id)
     faults = chaos_engine.list_rules(scenario_id=session.scenario_id)
@@ -142,7 +142,7 @@ def replay_session_trace(
     repro_bundle_json: Annotated[str, Field(description="Serialized JSON string or object of a ReproBundle")]
 ) -> Dict[str, Any] | ToolResult:
     """Real-World Debug Meta-Tool: Deterministically replay a recorded trace bundle and return a drift analysis report."""
-    from mcp_gateway.recorder import ReplayEngine, ReproBundle
+    from mock_mcp.recorder import ReplayEngine, ReproBundle
 
     try:
         if isinstance(repro_bundle_json, str):

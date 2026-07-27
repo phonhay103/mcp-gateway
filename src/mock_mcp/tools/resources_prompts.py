@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import json
 import time
 
-from mcp_gateway.core.session import session_manager
+from mock_mcp.core.session import session_manager
 
 _SERVER_START_TIME = time.time()
 

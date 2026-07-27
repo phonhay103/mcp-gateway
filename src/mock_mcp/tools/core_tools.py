@@ -15,7 +15,7 @@ from typing import Annotated, Any, Dict, Optional
 from fastmcp.tools.base import ToolResult
 from pydantic import BaseModel, Field
 
-from mcp_gateway.core.session import session_manager
+from mock_mcp.core.session import session_manager
 
 _SERVER_START_TIME = time.time()
 
@@ -65,7 +65,7 @@ def check_scenario_tool_behavior(
     Check if the active scenario or chaos engine defines a tool-level result override, MCP error definition (isError: true), or injected fault.
     Returns ToolResult (if error defined) or dict (if mock_result defined), or None if normal execution.
     """
-    from mcp_gateway.chaos import chaos_engine
+    from mock_mcp.chaos import chaos_engine
 
     session = session_manager.get_session(session_id, scenario_id, server_id)
 
